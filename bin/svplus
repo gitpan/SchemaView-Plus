@@ -12,7 +12,7 @@ BEGIN {
 }
 
 use vars qw/$VERSION/;
-$VERSION = '0.09';
+$VERSION = '0.10';
 
 use DBI;
 use Tk;
@@ -31,21 +31,23 @@ require Tk::Entry;
 require Tk::Optionmenu;
 require Tk::Menubutton;
 require Tk::Scrollbar;
+require Tk::Radiobutton;
 require Tk::Toplevel;
 require Tk::Frame;
 require Tk::Label;
 require Tk::Button;
 require Tk::ProgressBar;
-# require Tk::ErrorDialog
 require Tk::DropSite;
 require Tk::DragDrop;
 
 use vars qw/$main $filename %data $canvas $repository_window $all_show
 	$repository $repository_object_type $placebutton $canvas_font
 	$canvas_font_b $repository_object_filter $info $progress 
-	$global_bind_cancel $dragdrop $xhints %Pressed $noshowrepository/;
+	$global_bind_cancel $dragdrop $xhints %Pressed $noshowrepository
+	%last_relationship_in_progress/;
 
-%data = ( );
+%data = ();
+reset_data();
 $filename = shift || 'noname.svp';
 
 # main program
@@ -156,11 +158,13 @@ $canvas->bind('_tables','<Leave>', sub { mouse_normal($canvas) });
 
 $main->update;
 
-loadfile() if -e $filename;
+if (-e $filename) {
+	loadfile();
+} else {
+	newfile();
+}
 
 mouse_hour($main);
-
-#repository() unless Exists $repository_window;
 
 show_canvas();
 
@@ -194,10 +198,12 @@ sub basename {
 
 sub newfile {
 	%data = ();
+	reset_data();
 	$filename = 'noname.svp';
 	$main->title('SchemaView Plus ['.basename($filename).']');
 	$canvas->delete('all');
 	repository() unless Exists $repository_window;
+	$data{environment}->{windows}{repository}{showed} = 1;
 	show_all();
 }
 
@@ -230,6 +236,7 @@ sub openfile {
 
 sub loadfile {
 	%data = ();
+	reset_data();
 	mouse_hour($main);
 	$progress->value(0);
 	my $lenfile = (stat($filename))[7];
@@ -490,11 +497,7 @@ sub retrieve {
 
 		mouse_hour($main);
 		# fetching all types of table and views
-		no strict 'refs';
-		$data{sc_types} = [ map { { name => $_, value => &$_ }; } 
-			$catalog->sc_types() ];
-		use strict 'refs';
-		for (@{$data{sc_types}}) { $_->{name} =~ s/^SC_TYPE_//; }
+		sctypes();
 
 		# fetching all tables and views for selection
 		my @tables = $catalog->tables_with_types;
@@ -707,7 +710,7 @@ sub repository {
 				-title => 'More information', 
 				-message => 
 				'You must select any object first.');
-		})->grid(-row => 1, -column => 1);
+		})->grid(-row => 1, -column => 1, -sticky => 'nsew');
 	$placebutton = $fb->Button(-text => 'Place', -command => sub {
 			if (defined (my $sel = $repository->curselection)) {
 				my $object = $repository->get($sel);
@@ -738,7 +741,72 @@ sub repository {
 				-title => $placebutton->cget('text'), 
 				-message => 
 				'You must select any object first.');
-		})->grid(-row => 1, -column => 2);
+		})->grid(-row => 1, -column => 2, -sticky => 'nsew');
+	$fb->Button(-text => 'Rename', -command => sub {
+			if (defined (my $sel = $repository->curselection)) {
+				my $object = $repository->get($sel);
+				$object =~ s/^[+-] //;
+				$object =~ s/ \([RTV]\)$//;
+				$info->configure(-text => '');
+				for (@{$data{tables}}) {
+					if ($_->{name} eq $object) {
+						rename_object($_,'table');
+						return;
+					}
+				}
+				for (@{$data{relationships}}) {
+					if ($_->{name} eq $object) {
+						rename_object($_,
+							'relationship');
+						return;
+					}
+				}
+				$main->messageBox(-icon => 'error', 
+					-type => 'OK', 
+					-title => 'Rename object', 
+					-message => 
+					'Object not found in object database.');
+				return;
+			}
+			$main->messageBox(-icon => 'error', 
+				-type => 'OK', 
+				-title => 'Rename object', 
+				-message => 
+				'You must select any object first.');
+		})->grid(-row => 1, -column => 3, -sticky => 'nsew');
+	$fb->Button(-text => 'New object', -command => \&new_object
+		)->grid(-row => 2, -column => 1, -sticky => 'nsew');
+	$fb->Button(-text => 'Edit', -command => sub {
+			if (defined (my $sel = $repository->curselection)) {
+				my $object = $repository->get($sel);
+				$object =~ s/^[+-] //;
+				$object =~ s/ \([RTV]\)$//;
+				$info->configure(-text => '');
+				for (@{$data{tables}}) {
+					if ($_->{name} eq $object) {
+						edit_table($_);
+						return;
+					}
+				}
+				for (@{$data{relationships}}) {
+					if ($_->{name} eq $object) {
+						edit_relationship($_);
+						return;
+					}
+				}
+				$main->messageBox(-icon => 'error', 
+					-type => 'OK', 
+					-title => 'Edit object', 
+					-message => 
+					'Object not found in object database.');
+				return;
+			}
+			$main->messageBox(-icon => 'error', 
+				-type => 'OK', 
+				-title => 'Edit object', 
+				-message => 
+				'You must select any object first.');
+		})->grid(-row => 2, -column => 2, -sticky => 'nsew');
 	$fb->Button(-text => 'Drop', -command => sub {
 			if (defined (my $sel = $repository->curselection)) {
 				my $object = $repository->get($sel);
@@ -769,7 +837,7 @@ sub repository {
 				-title => 'Drop object',
 				-message => 
 				'You must select any object first.');
-		})->grid(-row => 1, -column => 3);
+		})->grid(-row => 2, -column => 3, -sticky => 'nsew');
 	$repository->bind('<1>',[ \&click_repository, 1 ]);
 	$repository->bind('<3>', [ \&repository_popup, Ev('x'), Ev('y') ]);
 	$repository_window->bind('<Key>', [ \&keypress, Ev('K') ]);
@@ -1198,9 +1266,12 @@ sub make_coords {
 	my $firstlinespace = $canvas->fontMetrics($canvas_font_b, -linespace);
 	my $linespace = $canvas->fontMetrics($canvas_font, -linespace);
 
-	my ($from_width,$to_width) = (0,0);  my ($from_table,$to_table);
+	my ($from_width,$to_width,$from_multiple,$to_multiple) = (0,0,0,0);
+	my ($from_table,$to_table);
 	my $from_item = $relationship->{from_columns}[0]{column}; 
+	++$from_multiple if scalar @{$relationship->{from_columns}} > 1;
 	my $to_item = $relationship->{to_columns}[0]{column}; 
+	++$to_multiple if scalar @{$relationship->{to_columns}} > 1;
 	for my $t (@{$data{tables}}) {
 		next unless ($relationship->{from_table} eq $t->{name} or
 			$relationship->{to_table} eq $t->{name}); 
@@ -1247,6 +1318,48 @@ sub make_coords {
 	}
 	$from_x += $from_width if $relationship->{from_side} eq 'right';
 	$to_x += $to_width if $relationship->{to_side} eq 'right';
+	
+	%last_relationship_in_progress = ();
+	if ($from_multiple) {
+		my $fd = $from_x-10;
+		$fd += 20 if $relationship->{from_side} eq 'right';
+ 		my @fp = ();  my $it = 0;  my %from_col = ();
+  		for (@{$relationship->{from_columns}}) { 
+			++$from_col{$_->{column}}; 
+		}
+		for (@{$from_table->{columns}}) { 
+			++$it;
+			push @fp,$from_table->{y}+10+$firstlinespace+
+				$it*$linespace-$linespace/2 if $from_col{$_}; 
+		}
+		@fp = sort @fp;
+		$from_y = ($fp[$#fp]-$fp[0])/2 + $fp[0];
+		$last_relationship_in_progress{from_delta} = $fd;
+		$last_relationship_in_progress{from_cols} = \@fp;
+		$last_relationship_in_progress{from_x} = $from_x;
+		$last_relationship_in_progress{from_y} = $from_y;
+		$from_x = $fd;
+	}
+	if ($to_multiple) {
+		my $td = $to_x-10;
+		$td += 20 if $relationship->{to_side} eq 'right';
+		my @tp = ();  my $it = 0;  my %to_col = ();
+		for (@{$relationship->{to_columns}}) { 
+			++$to_col{$_->{column}};
+		}
+		for (@{$to_table->{columns}}) { 
+			++$it;
+			push @tp,$to_table->{y}+10+$firstlinespace+
+				$it*$linespace-$linespace/2 if $to_col{$_}; 
+		}
+		@tp = sort @tp;
+		$to_y = ($tp[$#tp]-$tp[0])/2 + $tp[0];
+		$last_relationship_in_progress{to_delta} = $td;
+		$last_relationship_in_progress{to_cols} = \@tp;
+		$last_relationship_in_progress{to_x} = $to_x;
+		$last_relationship_in_progress{to_y} = $to_y;
+		$to_x = $td;
+	}
 
 	my $left = $from_table->{x};
 	$left = $to_table->{x} if $to_table->{x} < $from_table->{x};
@@ -1327,11 +1440,33 @@ sub show_relationship {
 
 	my @points = make_coords($relationship);
 
+	my @lines = ();
+	if (scalar @{$relationship->{from_columns}} > 1) {
+		# multiple from columns
+		my @y = @{$last_relationship_in_progress{from_cols}};
+		my $yp = $last_relationship_in_progress{from_y};
+		my $x1 = $last_relationship_in_progress{from_x};
+		my $x2 = $last_relationship_in_progress{from_delta};
+		for (sort @y) { push @lines,[$x1,$_,$x2,$yp]; }
+	}
+	if (scalar @{$relationship->{to_columns}} > 1) {
+		# multiple to columns
+		my @y = @{$last_relationship_in_progress{to_cols}};
+		my $yp = $last_relationship_in_progress{to_y};
+		my $x1 = $last_relationship_in_progress{to_x};
+		my $x2 = $last_relationship_in_progress{to_delta};
+		for (sort @y) { push @lines,[$x1,$_,$x2,$yp]; }
+	}
+	for (@lines) {
+		$canvas->createLine(@$_,
+			-tags => [ $relationship->{name}, '_relationships' ]);
+	}
+
 	my @sel = ($relationship->{name}.'_sel');
 	if ($relationship->{selection}) {
 		$canvas->createLine(@points, -fill => 'darkgray', -dash => '-',
 			-tags => [ $relationship->{name}, '_relationships', 
-				'selection' ]) if $relationship->{smooth};
+				'selection', @sel ]) if $relationship->{smooth};
 		my @p = @points;
 		my $num = 0;
 		while (@p) {
@@ -1340,7 +1475,7 @@ sub show_relationship {
 				$num;
 			$canvas->createRectangle($x-2,$y-2,$x+2,$y+2,
 				-tags => [ $relationship->{name}, $dragname,
-					'_relationships', 'selection' ],
+					'_relationships', 'selection', @sel ],
 				-fill => 'black');
 			++$num;
 		}
@@ -1351,10 +1486,10 @@ sub show_relationship {
 		-smooth => $relationship->{smooth});
 	$canvas->bind($relationship->{name},'<1>', 
 		[ \&relationship_mouse_down, $relationship, Ev('x'), Ev('y') ]);
-	$canvas->bind($relationship->{name},'<Control-1>', 
+	$canvas->bind($relationship->{name}.'_sel','<Control-1>', 
 		[ \&relationship_ctrl_mouse_down, $relationship, Ev('x'),
 			Ev('y') ]);
-	$canvas->bind($relationship->{name},'<Control-3>', 
+	$canvas->bind($relationship->{name}.'_sel','<Control-3>', 
 		[ \&relationship_ctrl_mouse_2_down, $relationship, Ev('x'),
 			Ev('y') ]);
 	$canvas->bind($relationship->{name},'<B1-Motion>', 
@@ -1426,6 +1561,11 @@ sub relationship_popup {
 		$popup->add('command', -label => 'More information',
 			-command => [ \&more_info_relationship, 
 			$relationship ]);
+		$popup->add('command', -label => 'Edit',
+			-command => [ \&edit_relationship, $relationship ]);
+		$popup->add('command', -label => 'Rename',
+			-command => [ \&rename_object, $relationship,
+			'relationship' ]);
 		$popup->separator;
 		$popup->add('command', -label => 'Unselect',
 			-command => [ \&deselect_relationship, $relationship ]);
@@ -1472,6 +1612,10 @@ sub table_popup {
 	if ($table->{selection}) {
 		$popup->add('command', -label => 'More information',
 			-command => [ \&more_info_table, $table ]);
+		$popup->add('command', -label => 'Edit',
+			-command => [ \&edit_table, $table ]);
+		$popup->add('command', -label => 'Rename',
+			-command => [ \&rename_object, $table, 'table' ]);
 		$popup->separator;
 		$popup->add('command', -label => 'Unselect',
 			-command => [ \&deselect_table, $table ]);
@@ -2020,6 +2164,382 @@ sub canvas_mouse_down {
 	deselect_all();
 }
 
+sub exists_name {
+	my $name = shift;
+
+	for (@{$data{tables}}) { return 1 if $_->{name} eq $name; }
+	for (@{$data{relationships}}) { return 1 if $_->{name} eq $name; }
+
+	return 0;
+}
+
+sub inc_name {
+	my $name = shift;
+
+	my ($a,$b) = split /_/,$name;
+	++$b;
+
+	return sprintf '%s_%08d',$a,$b;
+}
+
+sub new_object {
+	my $d = $main->DialogBox(-title => 'Type of object',
+		-buttons => [ 'Create', 'Cancel' ]);
+
+	my $type = 'table';
+	$d->Label(-text => 'Please select type of created object:')
+		->grid(-column => 1, -row => 1, -sticky => 'ew',
+		-columnspan => 3);
+	$d->Radiobutton(-variable => \$type, -value => 'table',
+		-text => 'Table', -anchor => 'w')
+		->grid(-column => 2, -row => 2, -sticky => 'ew');
+	$d->Radiobutton(-variable => \$type, -value => 'view', -text => 'View',
+		-anchor => 'w')
+		->grid(-column => 2, -row => 3, -sticky => 'ew');
+#	$d->Radiobutton(-variable => \$type, -value => 'relationship',
+#		-text => 'Relationship', -anchor => 'w')
+#		->grid(-column => 2, -row => 4, -sticky => 'ew');
+
+	$d->gridRowconfigure(1, -weight => 0, -minsize => 30);
+	$d->gridRowconfigure(2, -weight => 0, -minsize => 30);
+	$d->gridRowconfigure(3, -weight => 0, -minsize => 30);
+	$d->gridRowconfigure(4, -weight => 0, -minsize => 30);
+	
+	$d->gridColumnconfigure(1, -weight => 0, -minsize => 100);
+	$d->gridColumnconfigure(2, -weight => 0, -minsize => 100);
+	$d->gridColumnconfigure(3, -weight => 0, -minsize => 100);
+
+	if ($d->Show eq 'Create') {
+		my $d = $main->DialogBox(-title => 'Name of '.$type,
+			-buttons => [ 'Create', 'Cancel' ]);
+
+		my $name = uc $type . '_00000000';
+
+		while (exists_name($name)) {
+			$name = inc_name($name);
+			if ($name =~ /99999999$/) {
+				$name = uc $type . '_????????';
+				last;
+			}
+		}
+		
+		$d->Label(-text => 'Please select name for created '.$type.':')
+			->grid(-column => 1, -row => 1, -sticky => 'ew');
+		$d->Entry(-textvariable => \$name)
+			->grid(-column => 1, -row => 2, -sticky => 'ew');
+
+		$d->gridRowconfigure(1, -weight => 0, -minsize => 30);
+		$d->gridRowconfigure(2, -weight => 0, -minsize => 30);
+	
+		$d->gridColumnconfigure(1, -weight => 0, -minsize => 100);
+		$d->gridColumnconfigure(2, -weight => 0, -minsize => 100);
+		$d->gridColumnconfigure(3, -weight => 0, -minsize => 100);
+
+		while ((my $res = $d->Show) ne 'Cancel') {
+			if ($res eq 'Create') {
+				$name = uc $name;
+				unless ($name) {
+					$main->messageBox(-icon => 'error',
+						-type => 'OK', 
+						-title => 'Null error', 
+						-message => 
+							'Name must be filled.');
+				} elsif (exists_name($name)) {
+					$main->messageBox(-icon => 'error',
+						-type => 'OK', 
+						-title => 'Duplicate error', 
+						-message => 
+							'Name already used.');
+				} else {
+					if ($type eq 'relationship') {
+						create_relationship($name);
+					} else {
+						create_table($name,$type);
+					}
+					last;
+				}
+			}
+		} 
+	}
+	show_repository;
+	click_repository;
+}
+
+sub create_relationship {
+	my $name = shift;
+
+	my %relation = ();
+	$relation{schema} = 'DESIGN';
+
+	push @{$data{relationships}},\%relation;
+
+	# NEEDED: select from and to table
+	# NEEDED: calling edit_relationship for selecting columns
+}
+
+sub create_table {
+	my ($name,$type) = @_;
+
+	sctypes() unless $data{sc_types};
+
+	for (@{$data{sc_types}}) {
+		if (lc($_->{name}) eq $type) {
+			$type = $_->{value};
+			last;
+		}
+	}
+
+	my %table = ();
+	$table{name} = $name;
+	$table{type} = $type;
+	$table{schema} = 'DESIGN';
+	$table{columns} = [ ];
+
+	push @{$data{tables}},\%table;
+
+	edit_table($data{tables}->[scalar(@{$data{tables}})-1]);
+}
+
+sub edit_table_mouse_down {
+	my ($obj,$structure,$x,$y) = @_;
+
+	my $item = $structure->nearest($y);
+	$structure->scanMark($x,$y);
+	$structure->{svplus_item} = $item;
+}
+
+sub edit_table_motion {
+	my ($obj,$structure,$x,$y) = @_;
+	$structure->scanDragto($x,$y);
+	my $now = $structure->nearest($y);
+	my $last = $structure->{svplus_item};
+	return if $now == $last;
+	my $text = $structure->get($last);
+	if ($now < $last) {
+		$structure->delete($last);
+		$structure->insert($now,$text);
+	} else {
+		$structure->insert($now+1,$text);
+		$structure->delete($last);
+	}
+	$structure->{svplus_item} = $now;
+	$structure->selectionClear(0,'end');
+	$structure->selectionSet($now);
+}
+
+sub edit_table_mouse_up {
+	edit_table_motion(@_);
+}
+
+sub edit_table {
+	my $table = shift;
+	my $d = $main->DialogBox(-title => 'Edit '.type_desc($table->{type}),
+		-buttons => [ 'Accept', 'Cancel' ]);
+
+	$d->Label(-text => 'Current structure of '.type_desc($table->{type}).
+		':')
+		->grid(-column => 1, -row => 1, -sticky => 'ew',
+		-columnspan => 3);
+	my $structure = $d->Scrolled('Listbox', -setgrid => 1,
+		-scrollbars => 'e', -selectmode => 'multiple')
+		->grid(-column => 1, -row => 2, -sticky => 'ew',
+		-columnspan => 3);
+	$structure->bind('<1>', [ \&edit_table_mouse_down, $structure, Ev('x'),
+		Ev('y') ]);
+	$structure->bind('<B1-Motion>', [ \&edit_table_motion, $structure,
+		Ev('x'), Ev('y') ]);
+	$structure->bind('<B1-ButtonRelease>', [ \&edit_table_mouse_up,
+		$structure, Ev('x'), Ev('y') ]);
+
+	$d->Label(-text => 'Item:')
+		->grid(-column => 1, -row => 3, -sticky => 'ew');
+	my $item = '';
+
+	my %reserved = ();  my %redraw = ();
+	for my $rel (@{$data{relationships}}) {
+		if ($rel->{from_table} eq $table->{name}) {
+			for (@{$rel->{from_columns}}) {
+				++$reserved{$_->{column}};
+			}
+			$redraw{$rel->{name}} = $rel;
+		}
+		if ($rel->{to_table} eq $table->{name}) {
+			for (@{$rel->{to_columns}}) {
+				++$reserved{$_->{column}};
+			}
+			$redraw{$rel->{name}} = $rel;
+		}
+	}
+	$d->Entry(-textvariable => \$item)
+		->grid(-column => 2, -row => 3, -sticky => 'ew');
+	$d->Button(-text => 'Add', -command => sub {
+			return unless $item;
+			$item = uc $item;
+			for ($structure->get(0,'end')) {
+				if ($_ eq $item) {
+					$main->messageBox(-icon => 'error',
+						-type => 'OK', 
+						-title => 'Duplicate error', 
+						-message => 
+						'Name of item already used.');
+					return;
+				}
+			}
+			$structure->insert('end',$item);
+			$item = '';
+		})->grid(-column => 3, -row => 3, -sticky => 'ew');
+	$d->Button(-text => 'Delete all selected items', -command => sub {
+			my @sel = $structure->curselection();
+			my $res = 0;
+			for (reverse sort @sel) {
+				if ($reserved{$structure->get($_)}) {
+					++$res;
+				} else {
+					$structure->delete($_);
+				}
+			}
+			$main->messageBox(-icon => 'error', -type => 'OK', 
+				-title => 'Check error', 
+				-message => 'You try to delete item which is part of relationship. This operation is not allowed. You must drop relationship before this delete.')
+				if $res;
+		})->grid(-column => 1, -row => 4, -sticky => 'ew',
+		-columnspan => 3);
+
+	$structure->delete(0,'end');
+	for (@{$table->{columns}}) { $structure->insert('end',uc $_); }
+
+	$d->gridRowconfigure(1, -weight => 0, -minsize => 30);
+	$d->gridRowconfigure(2, -weight => 0, -minsize => 300);
+	$d->gridRowconfigure(3, -weight => 0, -minsize => 30);
+	$d->gridRowconfigure(4, -weight => 0, -minsize => 30);
+	
+	$d->gridColumnconfigure(1, -weight => 0, -minsize => 50);
+	$d->gridColumnconfigure(2, -weight => 0, -minsize => 150);
+	$d->gridColumnconfigure(3, -weight => 0, -minsize => 50);
+
+	if ($d->Show eq 'Accept') {
+		$table->{columns} = [ $structure->get(0,'end') ];
+		show_table($table);
+		for (keys %redraw) { show_relationship($redraw{$_}); }
+	}
+	click_repository;
+
+	# NEEDED: support for changing order of items
+}
+
+sub edit_relationship {
+	my $relationship = shift;
+	$main->messageBox(-icon => 'error', -type => 'OK', 
+		-title => 'Not yet', 
+		-message => 'Edit relationship not yet fully implemented.');
+	click_repository;
+
+	# NEEDED: all
+}
+
+sub rename_object {
+	my ($object,$what) = @_;
+
+	my $d = $main->DialogBox(-title => 'Rename of '.$object->{name},
+			-buttons => [ 'Rename', 'Cancel' ]);
+
+	my $name = $object->{name};
+
+	$d->Label(-text => 'Please select new name for '.
+		$object->{name}.':')
+		->grid(-column => 1, -row => 1, -sticky => 'ew');
+	$d->Entry(-textvariable => \$name)
+		->grid(-column => 1, -row => 2, -sticky => 'ew');
+
+	$d->gridRowconfigure(1, -weight => 0, -minsize => 30);
+	$d->gridRowconfigure(2, -weight => 0, -minsize => 30);
+	
+	$d->gridColumnconfigure(1, -weight => 0, -minsize => 100);
+	$d->gridColumnconfigure(2, -weight => 0, -minsize => 100);
+	$d->gridColumnconfigure(3, -weight => 0, -minsize => 100);
+
+	while ((my $res = $d->Show) ne 'Cancel') {
+		if ($res eq 'Rename') {
+			$name = uc $name;
+			unless ($name) {
+				$main->messageBox(-icon => 'error',
+					-type => 'OK', 
+					-title => 'Null error', 
+					-message => 
+						'Name must be filled.');
+			} elsif (exists_name($name) and $name 
+					ne $object->{name}) {
+				$main->messageBox(-icon => 'error',
+					-type => 'OK', 
+					-title => 'Duplicate error', 
+					-message => 
+						'Name already used.');
+			} else {
+				last if $name eq $object->{name};	
+				$canvas->delete($object->{name});
+				if ($what eq 'relationship') {
+					$object->{name} = $name;
+					show_relationship($object);
+				} else {
+					my %redraw = ();
+					for my $rel (@{$data{relationships}}) {
+						if ($rel->{from_table} eq 
+							$object->{name}) {
+							$rel->{from_table}
+								= $name;
+							for (@{$rel->
+							 {from_columns}}) {
+								$_->{table} = 
+								 $name if 
+								  $_->{table} eq
+								  $object->
+								  {name};
+							}
+							$redraw{$rel->{name}} 
+								= $rel;
+						}
+						if ($rel->{to_table} eq 
+							$object->{name}) {
+							$rel->{to_table}
+								= $name;
+							for (@{$rel->
+							 {to_columns}}) {
+								$_->{table} = 
+								 $name if 
+								  $_->{table} eq
+								  $object->
+								  {name};
+							}
+							$redraw{$rel->{name}}
+								= $rel;
+						}
+					}
+					$object->{name} = $name;
+					show_table($object);
+					for (keys %redraw) {
+						show_relationship($redraw{$_});
+					}
+				}
+				last;
+			}
+		}
+	} 
+	show_repository;
+	click_repository;
+}
+sub reset_data {
+	%data = (relationships => [], tables => [], environment => {});
+	sctypes();
+}
+
+sub sctypes {
+	no strict 'refs';
+	$data{sc_types} = [ map { { name => $_, value => &$_ }; } 
+		DBIx::SystemCatalog->sc_types() ];
+	use strict 'refs';
+	for (@{$data{sc_types}}) { $_->{name} =~ s/^SC_TYPE_//; }
+}
+
 1;
 
 __END__
@@ -2055,7 +2575,7 @@ Schema can be printed to PostScript file.
 
 =head1 VERSION
 
-0.09
+0.10
 
 =head1 TODO
 
@@ -2063,7 +2583,6 @@ Announcing on Freshmeat,
 droping IDT relationships,
 posterizing PostScript output,
 retrieving only updates from database (for schema),
-editing in repository,
 showing primary keys,
 layers for tables and views,
 support for SV format and dump format (if XML modules not present),
@@ -2085,11 +2604,11 @@ solving known bugs.
 
 =head1 KNOWN BUGS
 
-Now I can't show multiple relationships (two and more columns, only first
-of these columns are drawn),
-problem with manipulating of dragpoint in smooth coords based connection method,
+Problem with manipulating of dragpoint in smooth coords based connection method,
 if only one table is, all operations work very slowly,
-large tables quite slow move.
+large tables quite slow move,
+edit relationship don't work,
+creating relationship work bad.
 
 =head1 AUTHOR
 
