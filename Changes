@@ -1,5 +1,8 @@
 Revision history for Perl extension SchemaView Plus.
 
+0.16 <20020121>
+	- removing test for XML::SimpleParser
+
 0.15 <20020111>
 	- PostScript::Poster instead of standalone poster
 
