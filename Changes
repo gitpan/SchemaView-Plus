@@ -1,5 +1,10 @@
 Revision history for Perl extension SchemaView Plus.
 
+0.13 <20011113>
+	- create relationship
+	- edit relationship
+	- finding objects in object repository
+
 0.12 <20011111>
 	- new about box
 	- splash

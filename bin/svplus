@@ -12,7 +12,7 @@ BEGIN {
 }
 
 use vars qw/$VERSION/;
-$VERSION = '0.12';
+$VERSION = '0.13';
 
 use DBI;
 use Tk;
@@ -787,7 +787,7 @@ sub retrieve {
 		}
 
 		# fetching all relationships between tables
-		my @allrel = $catalog->reationships;
+		my @allrel = $catalog->relationships;
 		my %rel = ();
 		for (@allrel) { ++$rel{$_->{name}}; }
 		my @oldrel = ();
@@ -835,14 +835,14 @@ sub repository {
 		->pack(-side => 'top', -anchor => 'n', -fill => 'x');
 
 	$fhp->Label(-text => 'Object type:')
-		->grid(-row => 0, -sticky => 'nsew', -column => 0);
+		->grid(-row => 0, -sticky => 'nsw', -column => 0);
 	$fhp->Optionmenu(-options => [ 'All', 'Tables', 'Views', 
 			'Tables and views', 'Relationships' ],
 		-textvariable => \$repository_object_type,
 		-command => \&show_repository)
 		->grid(-row => 0, -sticky => 'nsew', -column => 1);
 	$fhp->Label(-text => 'Object filter:')
-		->grid(-row => 1, -sticky => 'nsew', -column => 0);
+		->grid(-row => 1, -sticky => 'nsw', -column => 0);
 	$fhp->Optionmenu(-options => [ qw/All Unplaced Placed/ ],
 		-textvariable => \$repository_object_filter,
 		-command => \&show_repository)
@@ -851,6 +851,12 @@ sub repository {
 	$fhp->gridRowconfigure(1, -weight => 0, -minsize => 15);
 	$fhp->gridColumnconfigure(0, -weight => 0, -minsize => 60);
 	$fhp->gridColumnconfigure(1, -weight => 1, -minsize => 140);
+
+	$fhp->Label(-text => 'Find object:')
+		->grid(-row => 2, -sticky => 'nsw', -column => 0);
+	my $find = '';
+	my $fe = $fhp->Entry(-textvariable => \$find)
+		->grid(-row => 2, -sticky => 'nsew', -column => 1);
 
 	$repository = $repository_window->Scrolled('Listbox', -setgrid => 1,
 		-scrollbars => 'e', -selectmode => 'single')
@@ -1030,8 +1036,28 @@ sub repository {
 		})->grid(-row => 2, -column => 3, -sticky => 'nsew');
 	$repository->bind('<1>',[ \&click_repository, 1 ]);
 	$repository->bind('<3>', [ \&repository_popup, Ev('x'), Ev('y') ]);
-	$repository_window->bind('<Key>', [ \&keypress, Ev('K') ]);
-	$repository_window->bind('<KeyRelease>', [ \&keyrelease, Ev('K') ]);
+	$repository->bind('<Key>', [ \&keypress, Ev('K') ]);
+	$repository->bind('<KeyRelease>', [ \&keyrelease, Ev('K') ]);
+	$repository_window->bind($fe,'<KeyPress>',sub {
+			$repository->selectionClear(0,'end');
+			click_repository(1);
+			my $f = uc $find;
+			$f =~ s/^\s+//;
+			$f =~ s/\s+$//;
+			return unless $f;
+			study $f;
+			my $i = 0;
+			for ($repository->get(0,'end')) {
+				my $h = uc $_;
+				$h =~ s/^[-+] //;
+				if ($h =~ /^$f/) {
+					$repository->selectionSet($i,$i);
+					click_repository(1);
+					last;
+				}
+				++$i;
+			}
+		});
 	show_repository();	
 }
 
@@ -2613,9 +2639,12 @@ sub new_object {
 	$d->Radiobutton(-variable => \$type, -value => 'view', -text => 'View',
 		-anchor => 'w')
 		->grid(-column => 2, -row => 3, -sticky => 'ew');
-#	$d->Radiobutton(-variable => \$type, -value => 'relationship',
-#		-text => 'Relationship', -anchor => 'w')
-#		->grid(-column => 2, -row => 4, -sticky => 'ew');
+
+	if (@{$data{tables}}) {
+		$d->Radiobutton(-variable => \$type, -value => 'relationship',
+			-text => 'Relationship', -anchor => 'w')
+			->grid(-column => 2, -row => 4, -sticky => 'ew');
+	}
 
 	$d->gridRowconfigure(1, -weight => 0, -minsize => 30);
 	$d->gridRowconfigure(2, -weight => 0, -minsize => 30);
@@ -2686,11 +2715,42 @@ sub create_relationship {
 
 	my %relation = ();
 	$relation{schema} = 'DESIGN';
+	$relation{name} = $name;
 
-	push @{$data{relationships}},\%relation;
+	my $d = $main->DialogBox(-title => 'Create new relationship',
+		-buttons => [ 'Accept', 'Cancel' ]);
 
-	# NEEDED: select from and to table
-	# NEEDED: calling edit_relationship for selecting columns
+	$d->Label(-text => 'From table:')->grid(-column => 0, -row => 0,
+		-sticky => 'w');
+	$d->Label(-text => 'To table:')->grid(-column => 0, -row => 1,
+		-sticky => 'w');
+
+	my @tables = ();
+	for (sort { $a->{name} cmp $b->{name} } @{$data{tables}}) {
+		push @tables,$_->{name};
+	}
+
+	my $o1 = $tables[0];  my $o2 = $tables[0];
+	$d->Optionmenu(-options => \@tables, -textvariable => \$o1)
+		->grid(-column => 1, -row => 0, -sticky => 'ew');
+	$d->Optionmenu(-options => \@tables, -textvariable => \$o2)
+		->grid(-column => 1, -row => 1, -sticky => 'ew');
+
+	$d->gridRowconfigure(0, -weight => 1, -minsize => 30);
+	$d->gridRowconfigure(0, -weight => 1, -minsize => 30);
+	$d->gridColumnconfigure(0, -weight => 1, -minsize => 100);
+	$d->gridColumnconfigure(1, -weight => 1, -minsize => 100);
+
+	if ($d->Show eq 'Accept') {
+		$relation{from_table} = $o1;
+		$relation{to_table} = $o2;
+	
+		my $ref = \%relation;
+		push @{$data{relationships}},$ref;
+
+		my @rel = @{$data{relationships}};
+		edit_relationship($rel[$#rel]);
+	}
 }
 
 sub create_table {
@@ -2861,14 +2921,148 @@ sub edit_table {
 	click_repository;
 }
 
+sub select_columns {
+	my $table = shift;
+
+	my $d = $main->DialogBox(-title => 'Select columns',
+		-buttons => [ 'Select', 'Cancel' ]);
+
+	$d->Label(-text => 'Select columns from '.$table.':')
+		->pack(-side => 'top', -anchor => 'center');
+	my $l = $d->Scrolled('Listbox', -setgrid => 1,
+		-selectmode => 'multiple', -scrollbars => 'e')
+		->pack(-side => 'top', -fill => 'both', -expand => 1);
+
+	my $tab = undef;
+	for (@{$data{tables}}) {
+		if ($_->{name} eq $table) {
+			$tab = $_;
+			last;
+		}
+	}
+	return () unless defined $tab;
+
+	for (@{$tab->{columns}}) {
+		$l->insert('end',$_);
+	}
+
+	if ($d->Show() eq 'Select') {
+		my @all = ();
+		for ($l->curselection) {
+			push @all,$l->get($_);
+		}
+		return @all;
+	}
+
+	return ();
+}
+
 sub edit_relationship {
 	my $relationship = shift;
-	$main->messageBox(-icon => 'error', -type => 'OK', 
-		-title => 'Not yet', 
-		-message => 'Edit relationship not yet fully implemented.');
-	click_repository;
 
-	# NEEDED: all
+	my $d = $main->DialogBox(-title => 'Edit '.$relationship->{name}.
+		' relationship', -buttons => [ 'Accept', 'Cancel' ]);
+
+	$d->Label(-text => 'From table: '.$relationship->{from_table})
+		->grid(-column => 0, -row => 0, -sticky => 'w',
+		-columnspan => 2);
+	$d->Label(-text => ' --> ')->grid(-column => 2, -row => 1);
+	$d->Label(-text => 'To table: '.$relationship->{to_table})
+		->grid(-column => 3, -row => 0, -sticky => 'w',
+		-columnspan => 2);
+	my $lb1 = $d->Scrolled('Listbox', -selectmode => 'multiple',	
+		-setgrid => 1, -scrollbars => 'e')
+		->grid(-column => 0, -row => 1, -sticky => 'nsew',
+		-columnspan => 2);
+	my $lb2 = $d->Scrolled('Listbox', -selectmode => 'multiple',	
+		-setgrid => 1, -scrollbars => 'e')
+		->grid(-column => 3, -row => 1, -sticky => 'nsew',
+		-columnspan => 2);
+
+	$d->Button(-text => 'Delete', -command => sub { 
+			for (sort $lb1->curselection) {
+				$lb1->delete($_);	
+			}
+		})->grid(-column => 0, -row => 2, -sticky => 'nsew');
+	$d->Button(-text => 'Add', -command => sub {
+			my %all = ();
+			for ($lb1->get(0,'end')) {
+				++$all{$_};
+			}
+			for (select_columns($relationship->{from_table})) {
+				++$all{$_};
+			}
+			$lb1->delete(0,'end');
+			for (sort keys %all) {
+				$lb1->insert('end',$_);
+			}
+		})->grid(-column => 1, -row => 2, -sticky => 'nsew');
+	$d->Button(-text => 'Delete', -command => sub {
+			for (sort $lb2->curselection) {
+				$lb2->delete($_);	
+			}
+		})->grid(-column => 3, -row => 2, -sticky => 'nsew');
+	$d->Button(-text => 'Add', -command => sub {
+			my %all = ();
+			for ($lb2->get(0,'end')) {
+				++$all{$_};
+			}
+			for (select_columns($relationship->{to_table})) {
+				++$all{$_};
+			}
+			$lb2->delete(0,'end');
+			for (sort keys %all) {
+				$lb2->insert('end',$_);
+			}
+		})->grid(-column => 4, -row => 2, -sticky => 'nsew');
+
+	for (@{$relationship->{from_columns}}) {
+		$lb1->insert('end',$_->{column});
+	}
+	for (@{$relationship->{to_columns}}) {
+		$lb2->insert('end',$_->{column});
+	}
+
+	$d->gridColumnconfigure(0, -weight => 1, -minsize => 75);
+	$d->gridColumnconfigure(1, -weight => 1, -minsize => 75);
+	$d->gridColumnconfigure(2, -weight => 1, -minsize => 50);
+	$d->gridColumnconfigure(2, -weight => 1, -minsize => 75);
+	$d->gridColumnconfigure(2, -weight => 1, -minsize => 75);
+
+	$d->gridRowconfigure(0, -weight => 1, -minsize => 30);
+	$d->gridRowconfigure(1, -weight => 1, -minsize => 200);
+	$d->gridRowconfigure(2, -weight => 1, -minsize => 30);
+	
+	my $res;
+	do {
+		$res = $d->Show;
+		unless (($lb1->index('end') and $lb2->index('end'))
+				or $res eq 'Cancel') {
+			$res = '';
+			$main->messageBox(-icon => 'error',
+				-type => 'OK', -title => 'Edit relationship', 
+				-message => 
+				'You must specify from and to columns.');
+		}
+	} until $res;
+	if ($res eq 'Accept') {
+		$relationship->{from_columns} = [];
+		for ($lb1->get(0,'end')) {
+			push @{$relationship->{from_columns}},
+				{ table => $relationship->{from_table},
+				  column => $_ };	
+		}
+		$relationship->{to_columns} = [];
+		for ($lb2->get(0,'end')) {
+			push @{$relationship->{to_columns}},
+				{ table => $relationship->{to_table},
+				  column => $_ };	
+		}
+	}
+
+	show_repository;
+	show_canvas;
+	click_repository;
 }
 
 sub rename_object {
@@ -3070,7 +3264,7 @@ Schema can be printed to PostScript file.
 
 =head1 VERSION
 
-0.12
+0.13
 
 =head1 TODO
 
@@ -3095,10 +3289,6 @@ solving known bugs.
 
 Problem with manipulating of dragpoint in smooth coords based connection method,
 retrieving only updates from database -- now forgot all new informations,
-large tables quite slow move,
-edit relationship doesn't work,
-creating relationship works bad,
-repeated retrieving multiply objects in Object Repository,
 I retrieve always all relationships (e.g. for 1 table in large schema - slow).
 
 =head1 AUTHOR
