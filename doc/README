@@ -1,0 +1,13 @@
+SchemaView Plus 0.08
+(c) Copyright 2001 by Milan Sorm, sorm@pef.mendelu.cz
+
+If you plan to use this program you must respect
+all paragraphs of GNU GPL or Artistic License.
+
+You can find these licences in doc/LICENSE file.
+
+This software provides some functionality in drawing database schemas and
+some new extensions for Perl.
+
+Please read manual page for svplus, DBIx::SystemCatalog, Math::Project,
+Hints or Hints::Base for more information.

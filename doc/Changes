@@ -1,0 +1,41 @@
+Revision history for Perl extension SchemaView Plus.
+
+0.08 <20010406 Vendula>
+	- opening object repository window with raising
+	- Math::Project 0.03 with EXPORT_OK version of exporting functions
+	- hints database for svplus
+	- Hints::X and integrating hints into svplus
+	- key press and key release routines
+	- Control+Delete for dropping relationships
+
+0.07 <20010405 Miroslava>
+	- hints, hints base modules
+
+0.06 <20010404 Ivana>
+	- solving some small known bugs
+	- Math::Project 0.02
+	- error handling (in test mode)
+	- drag'n'drop between repository and canvas
+
+0.05 <20010403 Richard>
+	- simple post-install tests (loading modules, Math::Project)
+	- dropping dragpoints
+	- solving strange adding of dragpoints
+
+0.04 <20010325 Marian>
+	- coords based connections (dragpoint)
+	- progress bar
+	- smooth connection
+
+0.03 <20010322 Leona>
+	- enhanced object repository
+	- relationships and their connections
+
+0.02 <20010319 Josef>
+	- CPAN-style installation
+	- documentation
+	- introduce to SchemaView's author Miroslav Kripac
+
+0.01 <20010318 Eduard>
+	- first devel release
+	- presented on MZLU in Brno
