@@ -4,7 +4,7 @@ use strict;
 use vars qw/$VERSION @ISA @EXPORT_OK/;
 use Exporter;
 
-$VERSION = '0.01';
+$VERSION = '0.02';
 @ISA = qw/Exporter/;
 @EXPORT_OK = qw/total_dereference/;
 
@@ -52,7 +52,7 @@ __END__
 
 =head1 VERSION
 
-0.01
+0.02
 
 =head1 AUTHOR
 
@@ -60,12 +60,11 @@ __END__
 at Faculty of Economics,
 Mendel University of Agriculture and Forestry in Brno, Czech Republic.
 
-This module was needed for making SchemaView Plus (C<svplus>) for module
-XML::SimpleParser(3).
+This module was needed for making SchemaView Plus (C<svplus>).
 
 =head1 SEE ALSO
 
-perl(1), svplus(1), XML::SimpleParser(3).
+perl(1), svplus(1).
 
 =cut
 

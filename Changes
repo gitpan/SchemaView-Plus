@@ -1,9 +1,23 @@
 Revision history for Perl extension SchemaView Plus.
 
+0.15 <20020111>
+	- PostScript::Poster instead of standalone poster
+
+0.14 <20011127>
+	- DBIx::SystemCatalog::XBase - fs_ls() implementation
+	- DBIx::SystemCatalog used for dbsh - fs_ls()
+	- Data::CompactDump output format - export, loading with autodetecting
+	- stop working on XML::SimpleParser - bad way
+	- new betatester Muller
+	- founded new bugs, enlarging todo
+	- start working on PostScript::Poster
+	- MANIFEST.SKIP
+	- DBIx::SystemCatalog::Oracle support for unique and indexes
+
 0.13 <20011113>
-	- create relationship
-	- edit relationship
 	- finding objects in object repository
+	- edit relationship
+	- create relationship
 
 0.12 <20011111>
 	- new about box

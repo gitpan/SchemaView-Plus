@@ -5,7 +5,7 @@ use DBI;
 use DBIx::SystemCatalog;
 use vars qw/$VERSION @ISA/;
 
-$VERSION = '0.03';
+$VERSION = '0.04';
 @ISA = qw/DBIx::SystemCatalog/;
 
 1;
@@ -84,6 +84,20 @@ sub unique_indexes {
 
 	return () unless $table;
 
+	my $d = $obj->{dbi}->selectall_arrayref(q!SELECT all_constraints.constraint_name,all_cons_columns.column_name FROM all_constraints,all_cons_columns WHERE all_constraints.owner = ? AND all_constraints.constraint_type = 'U' AND all_constraints.table_name = ? AND all_constraints.constraint_name = all_cons_columns.constraint_name!,{},$obj->{schema},$table);
+
+	if (defined $d) {
+		my %res = ();
+		for (@$d) {
+			push @{$res{$_->[0]}},$_->[1];
+		}
+		my @res = ();
+		for (keys %res) {
+			push @res,$res{$_};
+		}
+		return @res;
+	}
+
 	return ();
 }
 
@@ -93,6 +107,19 @@ sub indexes {
 
 	return () unless $table;
 
+	my $d = $obj->{dbi}->selectall_arrayref(q!SELECT all_indexes.index_name,all_ind_columns.column_name FROM all_indexes,all_ind_columns WHERE all_indexes.owner = ? AND all_indexes.table_name = ? AND all_indexes.index_name = all_ind_columns.index_name!,{},$obj->{schema},$table);
+
+	if (defined $d) {
+		my %res = ();
+		for (@$d) {
+			push @{$res{$_->[0]}},$_->[1];
+		}
+		my @res = ();
+		for (keys %res) {
+			push @res,$res{$_};
+		}
+		return @res;
+	}
 	return ();
 }
 

@@ -12,18 +12,20 @@ BEGIN {
 }
 
 use vars qw/$VERSION/;
-$VERSION = '0.13';
+$VERSION = '0.15';
 
 use DBI;
 use Tk;
 use XML::Dumper;
 use XML::Parser;
+use Data::CompactDump;
 use DBIx::SystemCatalog;
 use Math::Project qw/abscissa_project/;
 use Hints::Base;
 use Hints::X;
 use Print::Printcap;
 use Logo::svplus;
+use PostScript::Poster;
 
 require Tk::Font;
 require Tk::FontDialog;
@@ -113,7 +115,15 @@ $menufile->command(-label => 'Save as...', -command => \&saveasfile,
 $menufile->command(-label => 'Revert', -command => \&revertfile, 
 	-underline => 0);
 $menufile->separator;
+my $menuexport = $menufile->cascade(-label => 'Export', -underline => 0)
+	->cget(-menu)->Menu;
+$menufile->entryconfigure('Export', -menu => $menuexport);
+$menufile->separator;
 $menufile->command(-label => 'Exit', -command => \&exit, -underline => 1);
+
+$menuexport->command(-label => 'Plain Dump File (*.dmp)', -underline => 0,
+	-command => \&export_dmp);
+
 
 my $menuschema = $menubar->Menubutton(-text => 'Schema', -underline => 0)
 	->pack(-side => 'left', -padx => 2);
@@ -180,7 +190,7 @@ $menuhelp->command(-label => 'About...', -command => sub {
 	$f->Label(-background => 'white', -text => 'Version '.$VERSION)
 		->pack(side => 'top', -anchor => 'center');
 	my $it = $f->Label(-background => 'white', -text => 
-		'(c) Copyright 2001 by Milan Sorm <sorm@pef.mendelu.cz>')
+		'(c) Copyright 2001-02 by Milan Sorm <sorm@pef.mendelu.cz>')
 		->pack(side => 'top', -anchor => 'center');
 	my $itfont = $it->Font();
 	$itfont->configure(-slant => 'italic', -weight => 'normal', -family => 'helvetica');
@@ -193,11 +203,15 @@ $menuhelp->command(-label => 'About...', -command => sub {
 		-row => 3, -sticky => 'nw');
 	$d->Label(-text => '   Miroslav Kripac (SchemaView)')
 		->grid(-column => 1, -row => 4, -sticky => 'nw');
-	$d->Label(-text => '   Ing. Hana Netrefova (betatester)')
+	$d->Label(-text => '   Ludek Finstrle (PgSQL support, contributor, betatester)')
 		->grid(-column => 1, -row => 5, -sticky => 'nw');
-	$d->Label(-text => '   Ludek Finstrle (PgSQL support, contributor)')
+	$d->Label(-text => '   Ing. Hana Netrefova (betatester)')
 		->grid(-column => 1, -row => 6, -sticky => 'nw');
-	$d->Label(-text => ' ')->grid(-column => 2, -row => 7, -sticky => 'nw');
+	$d->Label(-text => '   Bc. Jan Muller (betatester)')
+		->grid(-column => 1, -row => 7, -sticky => 'nw');
+	$d->Label(-text => '   Jos T.J. van Eijdnhoven (original poster in C)')
+		->grid(-column => 1, -row => 8, -sticky => 'nw');
+	$d->Label(-text => ' ')->grid(-column => 2, -row => 9, -sticky => 'nw');
 
 	$d->gridRowconfigure(0, -weight => 1, -minsize => 20);
 	$d->gridRowconfigure(1, -weight => 1, -minsize => 60);
@@ -207,6 +221,8 @@ $menuhelp->command(-label => 'About...', -command => sub {
 	$d->gridRowconfigure(5, -weight => 1, -minsize => 30);
 	$d->gridRowconfigure(6, -weight => 1, -minsize => 30);
 	$d->gridRowconfigure(7, -weight => 1, -minsize => 30);
+	$d->gridRowconfigure(8, -weight => 1, -minsize => 30);
+	$d->gridRowconfigure(9, -weight => 1, -minsize => 30);
 	
 	$d->gridColumnconfigure(0, -weight => 1, -minsize => 20);
 	$d->gridColumnconfigure(1, -weight => 1, -minsize => 200);
@@ -299,6 +315,7 @@ sub openfile {
 	my $fn = $main->getOpenFile(-defaultextension => '.svp', 
 		-filetypes => [ [ 'SchemaView Plus Files', '.svp' ],
 #				[ 'SchemaView Files', [ '.xml', '.sv' ] ],
+				[ 'Plain Dump Files', '.dmp' ],
 				[ 'All Files', '*' ] ],
 		-title => 'Open data file',
 		-initialdir => $initdir);
@@ -333,28 +350,53 @@ sub loadfile {
 			{ $clist->[$pos] .= $text; } 
 		else { push @$clist, 0 => $text; }
 	});
-	my $tree = $parser->parsefile($filename);
-	my $dump = new XML::Dumper;
-	$progress->configure(-to => 100, -value => 0);
-	$main->update();
+
+	my $data;
+	my $tree;
+	my $dump;
+
+	eval {
+		$tree = $parser->parsefile($filename);
+		$dump = new XML::Dumper;
+	};
+	if ($@) {
+		$data = {};
+		if (open F,$filename) {
+			my $evs = join '',<F>;
+			$evs = '$temp = '.$evs;
+			use vars qw/$temp/;
+			eval {
+				eval $evs;
+			};
+			$data = $temp->[0] unless $@;
+			close F;
+		}
+	} else {
+		$progress->configure(-to => 100, -value => 0);
+		$main->update();
 	
-	my $seekforbracket = 0;
-	my $newtree = undef;
-	for (@$tree) {
-		++$seekforbracket if $_ eq 'schemaviewplus';
-		if ($seekforbracket and ref $_) { $newtree = $_; last; }
+		my $seekforbracket = 0;
+		my $newtree = undef;
+		for (@$tree) {
+			++$seekforbracket if $_ eq 'schemaviewplus';
+			if ($seekforbracket and ref $_) { $newtree = $_; last; }
+		}
+		unless (defined $newtree) { 
+			open_other_formats($tree);  return; 
+		}
+		$seekforbracket = 0;
+		$tree = undef;
+		for (@$newtree) {
+			++$seekforbracket if $_ eq 'perldata';
+			if ($seekforbracket and ref $_) { $tree = $_; last; }
+		}
+		unless (defined $newtree) { 
+			open_other_formats($tree);  return; 
+		}
+		$tree = [ 'perldata', $tree ];
+		
+		$data = $dump->xml2pl($tree);
 	}
-	unless (defined $newtree) { open_other_formats($tree);  return; }
-	$seekforbracket = 0;
-	$tree = undef;
-	for (@$newtree) {
-		++$seekforbracket if $_ eq 'perldata';
-		if ($seekforbracket and ref $_) { $tree = $_; last; }
-	}
-	unless (defined $newtree) { open_other_formats($tree);  return; }
-	$tree = [ 'perldata', $tree ];
-	
-	my $data = $dump->xml2pl($tree);
 	if (defined $data and ref $data) {
 		my %loaded = %$data;
 		for (keys %loaded) {
@@ -486,7 +528,7 @@ sub savefile {
 
 sub saveasfile {
 	my $fn = $main->getSaveFile(-defaultextension => '.svp', 
-		-filetypes => [ [ 'SchemaView Plus Files', '.svp' ],
+		-filetypes => [ [ 'SchemaView Plus Files','.svp' ],
 				[ 'All Files', '*' ] ],
 		-title => 'Save data file as',
 		-initialdir => $initdir);
@@ -494,6 +536,25 @@ sub saveasfile {
 		$filename = $fn;
 		$main->title('SchemaView Plus ['.basename($filename).']');
 		savefile();
+	}
+}
+
+sub export_dmp {
+	my $fn = $main->getSaveFile(-defaultextension => '.dmp', 
+		-filetypes => [ [ 'Plain Dump Files','.dmp' ],
+				[ 'All Files', '*' ] ],
+		-title => 'Export data file as',
+		-initialdir => $initdir);
+	if ($fn) {
+		save_environment();
+		if (open F,">$fn") {
+			print F compact [ \%data ];
+			close F;
+			$main->messageBox(-icon => 'info', -type => 'OK', 
+				-title => 'Export file', 
+				-message => 'Export successful.');
+		}
+
 	}
 }
 
@@ -2463,10 +2524,10 @@ sub printps {
 	my %format_par = (
 		A4 => { x => 595, y => 842 },
 		A3 => { x => 842, y => 1191 } );
-	my @formats = qw/A4 A3 Fit/;
-	my $poster = `type -p poster 2>/dev/null`;
-	chomp $poster;
-	push @formats,'Poster' if $poster;
+	my @formats = qw/A4 A3 Fit Poster/;
+
+	my $poster = new PostScript::Poster;
+
 	my $format = '';
 	my $ftype = 'predefined';
 	my $fori = 0;
@@ -2503,7 +2564,7 @@ sub printps {
 	return unless $psop->Show eq 'OK';
 
 	my $format_big = '';  my $format_paper = '';
-	if ($poster and $ftype eq 'predefined' and $format eq 'Poster') {
+	if ($ftype eq 'predefined' and $format eq 'Poster') {
 		my $pop = $main->DialogBox(-title => 'Poster Options',
 			-buttons => [ "OK", "Cancel" ] );
 
@@ -2543,7 +2604,7 @@ sub printps {
 	my %pspar = (-file => $fn, -colormode => 'gray', -x => $x1, 
 		-y => $y1, -height => $yd+1, -width => $xd+1);
 
-	if ($poster and $ftype eq 'predefined' and $format eq 'Poster') {
+	if ($ftype eq 'predefined' and $format eq 'Poster') {
 		$pspar{-file} = "/tmp/svplus.poster.".$$.".ps";
 	} else {
 		if ($ftype eq 'predefined') {
@@ -2579,10 +2640,11 @@ sub printps {
 		
 	$canvas->postscript(%pspar);
 
-	if ($poster and $ftype eq 'predefined' and $format eq 'Poster') {
-		system "$poster -m $format_paper ".
-			(($format_big ne 'Fit')?"-p $format_big":"").
-			" -o $fn $pspar{-file} ; rm -f $pspar{-file}";
+	if ($ftype eq 'predefined' and $format eq 'Poster') {
+		my @p = ();
+		if ($format_big ne 'Fit') { @p = (-poster => $format_big); }
+		$poster->posterize(-media => $format_paper, @p, -outfile => $fn, -infile => $pspar{-file});
+		system "rm -f $pspar{-file}";
 	}
 
 	if ($device eq ':gv') {
@@ -3201,7 +3263,7 @@ sub splash_start {
 	$f->Label(-background => 'white', -text => 'Version '.$VERSION)
 		->pack(side => 'top', -anchor => 'center');
 	my $it = $f->Label(-background => 'white', -text => 
-		'(c) Copyright 2001 by Milan Sorm <sorm@pef.mendelu.cz>')
+		'(c) Copyright 2001-02 by Milan Sorm <sorm@pef.mendelu.cz>')
 		->pack(side => 'top', -anchor => 'center');
 	my $itfont = $it->Font();
 	$itfont->configure(-slant => 'italic', -weight => 'normal', -family => 'helvetica');
@@ -3264,41 +3326,48 @@ Schema can be printed to PostScript file.
 
 =head1 VERSION
 
-0.13
+0.15
 
 =head1 TODO
 
 Droping IDT relationships,
-layers for tables and views,
-support for SV format and dump format (if XML modules not present),
+layers for tables and views (for selecting some tables from schema as problem analysis),
+support for SV format,
 on-line web generating printing (to some image format), 
 context toolbox,
 hints on status line,
 alignment and grid,
+printing copies,
 text tool for making notes on canvas,
 integrated manual or web documentation,
 setting canvas size by user (enlarging), 
 backward update for databases,
 support comments in database schema,
 box with texts as special kind of objects,
-finding object in repository,
-locating object on canvas,
+autoplacement,
+ortogonal moving of object with Shift key,
+multilanguage support,
+configuration rc file with environment options,
+bookmarks for connecting to database,
 solving known bugs.
 
 =head1 KNOWN BUGS
 
 Problem with manipulating of dragpoint in smooth coords based connection method,
 retrieving only updates from database -- now forgot all new informations,
-I retrieve always all relationships (e.g. for 1 table in large schema - slow).
+I retrieve always all relationships (e.g. for 1 table in large schema - slow),
+many tables in create relationship don't allow selection,
+selecting object on canvas don't click_repository(),
+d'n'd object from object repository rollback in object repository listbox and filter don't work.
 
 =head1 AUTHOR
 
-(c) 2001 Milan Sorm, sorm@pef.mendelu.cz
+(c) 2001-02 Milan Sorm, sorm@pef.mendelu.cz
 at Faculty of Economics,
 Mendel University of Agriculture and Forestry in Brno, Czech Republic.
 
-Special thanks for Miroslav Kripac (SchemaView), Ing. Hana Netrefova
-(betatester) and Ludek Finstrle (PgSQL support, contributor).
+Special thanks for Miroslav Kripac (SchemaView), Ludek Finstrle (PgSQL support, contributor, betatester), Ing. Hana Netrefova (betatester),
+Bc. Jan Muller (betatester) and Jos T.J. van Eijdnhoven (original poster in C).
 
 This program was made because we need draw large database schema for 
 University Information System at our university. Miroslav Kripac's
@@ -3309,7 +3378,7 @@ scrollable canvas we write this yet another drawer.
 =head1 SEE ALSO
 
 perl(1); DBI(3), Tk(3), XML::Parser(3), XML::Dumper(3), DBIx::SystemCatalog(3),
-Math::Project(3), Hints(3).
+Math::Project(3), Hints(3), Print::Printcap(3), PostScript::Poster(3).
 
 =cut
 

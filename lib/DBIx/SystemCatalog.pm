@@ -5,7 +5,7 @@ use DBI;
 use Exporter;
 use vars qw/$VERSION @ISA @EXPORT/;
 
-$VERSION = '0.04';
+$VERSION = '0.06';
 @ISA = qw/Exporter/;
 @EXPORT = qw/SC_TYPE_TABLE SC_TYPE_VIEW SC_TYPE_UNKNOWN/;
 
@@ -365,6 +365,50 @@ sub indexes {
 	return ();
 }
 
+=head2 fs_ls CWD
+
+Emulating filesystem for dbsh - method must return list of names according to
+CWD. All items ended by / are directories. We must return ../ in subdirectories.
+
+Standard module produce next structure:
+
+	/Schema
+	/Schema/Tables
+	/Schema/Views
+
+and generate tables and views (or unknown table objects) into this structure.
+
+	my @files = $catalog->fs_ls('/');
+
+=cut
+
+sub fs_ls {
+	my $obj = shift;
+	my $cwd = shift;
+
+	if ($cwd eq '/') {		# schema
+		my @root = map { '/'.$_."/"; } sort $obj->schemas;
+		return @root if @root;
+		return ('/Schema/');
+	} elsif ($cwd =~ /^\/[^\/]+\/$/) { # type of objects
+		return map { $cwd.$_.'/'; } qw/.. Tables Views/;
+	} elsif ($cwd =~ /^\/([^\/]+)\/([^\/]+)\/$/) { # objects
+		$obj->schema($1);
+		my $type = SC_TYPE_VIEW;
+		if ($2 eq 'Tables') { $type = SC_TYPE_TABLE; }
+		my @res = ('../');
+		for my $object ($obj->tables_with_types()) {
+			if ($object->{type} == $type 
+				|| $object->{type} == SC_TYPE_UNKNOWN) {
+				push @res,$object->{name};
+			}
+		}
+		return map { $cwd.$_; } sort @res;
+	} else {			# unknown
+		return ();
+	}
+}
+
 1;
 
 __END__
@@ -387,7 +431,7 @@ fetching other objects and their specific properties.
 
 =head1 VERSION
 
-0.04
+0.06
 
 =head1 AUTHOR
 

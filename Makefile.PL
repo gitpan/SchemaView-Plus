@@ -54,7 +54,6 @@ my %opts = (
 	DISTNAME => 'SchemaView-Plus',
 	VERSION_FROM => 'bin/svplus',
 	EXE_FILES => [ "bin/svplus" ],
-	clean => { FILES => 'contrib/poster/poster contrib/poster/*.o' },
 	dist => { DIST_DEFAULT => 'tardist',
 		  COMPRESS => 'gzip -9vf', SUFFIX => 'gz',
 		  POSTOP => 'mv $(DISTNAME)-$(VERSION).tar.gz ../',

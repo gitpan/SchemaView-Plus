@@ -1,5 +1,5 @@
-SchemaView Plus 0.13
-(c) Copyright 2001 by Milan Sorm, sorm@pef.mendelu.cz
+SchemaView Plus 0.14
+(c) Copyright 2001-02 by Milan Sorm, sorm@pef.mendelu.cz
 
 If you plan to use this program you must respect LICENSE file.
 
@@ -7,13 +7,11 @@ This software provides some functionality in drawing database schemas and
 some new extensions for Perl.
 
 Depends on installation of Tk, Tk::FontDialog, Tk::ProgressBar, Tk::MListbox,
-XML::Parser, XML::Dumper, FindBin, DBI and some DBD driver.
+XML::Parser, XML::Dumper, Data::Dumper, FindBin, DBI and some DBD driver.
 
 Please read manual page for svplus, DBIx::SystemCatalog, Math::Project,
-Hints, Hints::Base, Data::RefSupport, Print::Printcap and XML::SimpleParser
+Hints, Hints::Base, Data::RefSupport, Print::Printcap and PostScript::Poster
 for more information.
-
-Can use external 'poster' program for posterizing PostScript.
 
 To install make
 
