@@ -5,7 +5,7 @@ use DBI;
 use Exporter;
 use vars qw/$VERSION @ISA @EXPORT/;
 
-$VERSION = '0.02';
+$VERSION = '0.04';
 @ISA = qw/Exporter/;
 @EXPORT = qw/SC_TYPE_TABLE SC_TYPE_VIEW SC_TYPE_UNKNOWN/;
 
@@ -37,6 +37,15 @@ DBIx::SystemCatalog - Perl module for accessing system catalog in common databas
 	# fetch all relationships between tables and views
 	my @relationships = $catalog->relationships;
   
+	# fetch all primary keys for table
+	my @primary_keys = $catalog->primary_keys($tables[0]->{name});
+
+	# fetch all unique indexes for table
+	my @unique_indexes = $catalog->unique_indexes($tables[0]->{name});
+
+	# fetch all indexes for table
+	my @indexes = $catalog->indexes($table[0]->{name});
+
 	# disconnect database
 	$dbh->disconnect;
 
@@ -317,6 +326,45 @@ sub relationships {
 	return ();
 }
 
+=head2 primary_keys
+
+Method return list of all columns which are primary keys of specified
+table.
+
+	my @primary_keys = $catalog->primary_keys($tablename);
+
+=cut
+
+sub primary_keys {
+	return ();
+}
+
+=head2 unique_indexes
+
+Method return list of all columns which contain unique indexes of specified
+table. Returns list of lists.
+
+	my @unique_indexes = $catalog->unique_indexes($tablename);
+
+=cut
+
+sub unique_indexes {
+	return ();
+}
+
+=head2 indexes
+
+Method return list of all columns which contain indexes of specified table.
+Returns list of lists.
+
+	my @indexes = $catalog->indexes($tablename);
+
+=cut
+
+sub indexes {
+	return ();
+}
+
 1;
 
 __END__
@@ -339,7 +387,7 @@ fetching other objects and their specific properties.
 
 =head1 VERSION
 
-0.02
+0.04
 
 =head1 AUTHOR
 

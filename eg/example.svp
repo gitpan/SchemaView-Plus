@@ -52,6 +52,11 @@
         <item key="2">REFER</item>
        </array>
       </item>
+      <item key="pk">
+       <array>
+        <item key="0">ID</item>
+       </array>
+      </item>
       <item key="schema">SORM</item>
       <item key="name">TAB2</item>
       <item key="placed">yes</item>

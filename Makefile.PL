@@ -1,3 +1,4 @@
+# BEGIN { $^W = 1 }
 BEGIN { require 5.003 }
 
 use ExtUtils::MakeMaker;
@@ -53,6 +54,7 @@ my %opts = (
 	DISTNAME => 'SchemaView-Plus',
 	VERSION_FROM => 'bin/svplus',
 	EXE_FILES => [ "bin/svplus" ],
+	clean => { FILES => 'contrib/poster/poster contrib/poster/*.o' },
 	dist => { DIST_DEFAULT => 'tardist',
 		  COMPRESS => 'gzip -9vf', SUFFIX => 'gz',
 		  POSTOP => 'mv $(DISTNAME)-$(VERSION).tar.gz ../',
@@ -63,8 +65,8 @@ if ($ExtUtils::MakeMaker::VERSION >= 5.43) {
 	$opts{AUTHOR} = 'Milan Sorm (sorm@pef.mendelu.cz)';
 	$opts{ABSTRACT} = 'Retrieve, drawing and printing database schema';
 	$opts{PREREQ_PM} = { DBI => '1.12', Tk => 0, 'XML::Parser' => 0,
-		'XML::Dumper' => '0.4', 'Data::Dumper' => 0, FindBin => 0,
-		'Tk::ProgressBar' => 0 };
+		'XML::Dumper' => '0.4', FindBin => 0, 'Tk::MListbox' => 0,
+		'Tk::ProgressBar' => 0, 'Tk::FontDialog' => 0 };
 }
 
 ExtUtils::MakeMaker::WriteMakefile(%opts);
@@ -82,3 +84,6 @@ EOF
 exit 0;
 
 package MY;
+
+__END__
+

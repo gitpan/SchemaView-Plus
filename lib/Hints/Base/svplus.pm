@@ -4,7 +4,7 @@ use strict;
 use Hints::Base;
 use vars qw/$VERSION @ISA/;
 
-$VERSION = '0.02';
+$VERSION = '0.03';
 @ISA = qw/Hints::Base/;
 
 =head1 NAME
@@ -59,11 +59,18 @@ to move with dragpoints.
 from object repository (and from canvas too).
 ---
 Try right-click to popup local context menu with useful commands.
+---
+For printing big poster on many smaller papers like A2 on eight A4 use Poster
+predefined PostScript output.
+---
+Primary keys are shown with marker '='.
+---
+You can change primary key in edit table dialog.
 __END__
 
 =head1 VERSION
 
-0.02
+0.03
 
 =head1 AUTHOR
 

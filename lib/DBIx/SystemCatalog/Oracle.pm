@@ -5,7 +5,7 @@ use DBI;
 use DBIx::SystemCatalog;
 use vars qw/$VERSION @ISA/;
 
-$VERSION = '0.01';
+$VERSION = '0.03';
 @ISA = qw/DBIx::SystemCatalog/;
 
 1;
@@ -64,3 +64,35 @@ sub relationships {
 		to_columns => $columns{$_->[3]} } } @$d if defined $d and @$d;
 	return ();
 }
+
+sub primary_keys {
+	my $obj = shift;
+	my $table = shift;
+
+	return () unless $table;
+
+	my $d = $obj->{dbi}->selectall_arrayref(q!SELECT all_cons_columns.column_name FROM all_constraints,all_cons_columns WHERE all_constraints.owner = ? AND all_constraints.constraint_type = 'P' AND all_constraints.table_name = ? AND all_constraints.constraint_name = all_cons_columns.constraint_name!,{},$obj->{schema},$table);
+
+	return map { $_->[0] } @$d if defined $d and @$d;
+
+	return ();
+}
+
+sub unique_indexes {
+	my $obj = shift;
+	my $table = shift;
+
+	return () unless $table;
+
+	return ();
+}
+
+sub indexes {
+	my $obj = shift;
+	my $table = shift;
+
+	return () unless $table;
+
+	return ();
+}
+
