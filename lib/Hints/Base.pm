@@ -5,7 +5,7 @@ use Hints;
 use IO::Handle;
 use vars qw/$VERSION @ISA/;
 
-$VERSION = '0.01';
+$VERSION = '0.02';
 @ISA = qw/Hints/;
 
 =head1 NAME
@@ -16,7 +16,7 @@ Hints::Base - Perl extension for hints program storage databases
 
 	use Hints::Base;
 
-	my $hints = new Hints 'program';
+	my $hints = new Hints::Base 'program';
 
 	print $hints->random();
 
@@ -66,7 +66,7 @@ __END__
 
 =head1 VERSION
 
-0.01
+0.02
 
 =head1 AUTHOR
 

@@ -12,7 +12,7 @@ BEGIN {
 }
 
 use vars qw/$VERSION/;
-$VERSION = '0.08';
+$VERSION = '0.09';
 
 use DBI;
 use Tk;
@@ -40,7 +40,7 @@ require Tk::ProgressBar;
 require Tk::DropSite;
 require Tk::DragDrop;
 
-use vars qw/$main $filename %data $canvas $repository_window 
+use vars qw/$main $filename %data $canvas $repository_window $all_show
 	$repository $repository_object_type $placebutton $canvas_font
 	$canvas_font_b $repository_object_filter $info $progress 
 	$global_bind_cancel $dragdrop $xhints %Pressed $noshowrepository/;
@@ -50,7 +50,7 @@ $filename = shift || 'noname.svp';
 
 # main program
 
-$global_bind_cancel = undef;
+$global_bind_cancel = undef;  $all_show = undef;
 %Pressed = ();
 $noshowrepository = undef;
 
@@ -127,7 +127,7 @@ If you plan to use this program you must respect all paragraphs of GNU GPL or Ar
 
 Many thanks goes to:
    Miroslav Kripac (SchemaView)
-   Ing. Hana Cerna (schema of UIS MZLU)
+   Ing. Hana Netrefova (schema of UIS MZLU)
 EOF
 	}, -underline => 0);
 
@@ -148,16 +148,19 @@ my $real_canvas = $canvas->Subwidget("canvas");
 $real_canvas->DropSite(-droptypes => [ 'Local' ],
 	-dropcommand => \&dragdrop_paste);
 $real_canvas->CanvasBind('<1>', [ \&canvas_mouse_down, Ev('x'), Ev('y') ]);
+$real_canvas->CanvasBind('<3>', [ \&canvas_popup, Ev('x'), Ev('y') ]);
 $main->bind('<Key>', [ \&keypress, Ev('K') ]);
 $main->bind('<KeyRelease>', [ \&keyrelease, Ev('K') ]);
 $canvas->bind('_tables','<Enter>', sub { mouse_move($canvas) });
 $canvas->bind('_tables','<Leave>', sub { mouse_normal($canvas) });
 
+$main->update;
+
 loadfile() if -e $filename;
 
 mouse_hour($main);
 
-repository();
+#repository() unless Exists $repository_window;
 
 show_canvas();
 
@@ -194,6 +197,7 @@ sub newfile {
 	$filename = 'noname.svp';
 	$main->title('SchemaView Plus ['.basename($filename).']');
 	$canvas->delete('all');
+	repository() unless Exists $repository_window;
 	show_all();
 }
 
@@ -269,6 +273,9 @@ sub loadfile {
 	mouse_normal($main);
 	for (@{$data{tables}},@{$data{relationships}}) 
 		{ delete $_->{selection}; }
+
+	deselect_all();
+	load_environment();
 }
 
 sub open_other_formats {
@@ -276,7 +283,77 @@ sub open_other_formats {
 	# Still not supported
 }
 
+sub save_environment {
+	$data{environment}->{canvas}{offset}{x} = $canvas->canvasx(0);
+	$data{environment}->{canvas}{offset}{y} = $canvas->canvasy(0);
+	my @scroll = $canvas->cget('-scrollregion');
+	$data{environment}->{canvas}{all}{left} = $scroll[0];
+	$data{environment}->{canvas}{all}{top} = $scroll[1];
+	$data{environment}->{canvas}{all}{right} = $scroll[2];
+	$data{environment}->{canvas}{all}{bottom} = $scroll[3];
+	
+	$data{environment}->{windows}{main}{geometry} = $main->geometry;
+	if (Exists $repository_window) {
+		$data{environment}->{windows}{repository}{geometry} 
+			= $repository_window->geometry;
+		$data{environment}->{windows}{repository}{showed} = 1;
+	} else {
+		$data{environment}->{windows}{repository}{showed} = 0;
+	}
+	if ($xhints->showed()) {
+		$data{environment}->{windows}{hints}{geometry} 
+			= $xhints->geometry();
+		$data{environment}->{windows}{hints}{showed} = 1;
+	} else {
+		$data{environment}->{windows}{hints}{showed} = 0;
+	}
+}
+
+sub load_environment {
+	$canvas->xviewMoveto($data{environment}->{canvas}{offset}{x} / 
+		( ($data{environment}->{canvas}{all}{right} || 4000) 
+		- ($data{environment}->{canvas}{all}{left} || 0) ));
+	$canvas->yviewMoveto($data{environment}->{canvas}{offset}{y} / 
+		( ($data{environment}->{canvas}{all}{bottom} || 4000) 
+		- ($data{environment}->{canvas}{all}{top} || 0) ));
+	$canvas->configure(-scrollregion => [ 
+		$data{environment}->{canvas}{all}{left} || 0,
+		$data{environment}->{canvas}{all}{top} || 0,
+		$data{environment}->{canvas}{all}{right} || 4000,
+		$data{environment}->{canvas}{all}{bottom} || 4000 ]);
+	
+	$main->geometry($data{environment}->{windows}{main}{geometry} ||
+		'600x400');
+
+	if (Exists $repository_window) {
+		unless ($data{environment}->{windows}{repository}{showed}) {
+			$repository_window->destroy();
+		} else {
+			$repository_window->deiconify();
+			$repository_window->raise();
+		} 
+	} else {
+		repository() if
+			$data{environment}->{windows}{repository}{showed};
+	}
+
+	$repository_window->geometry(
+		$data{environment}->{windows}{repository}{geometry})
+		if Exists($repository_window)
+			and $data{environment}->{windows}{repository}{geometry};
+
+	unless ($data{environment}->{windows}{hints}{showed}) {
+		$xhints->hide();
+	} else {
+		$xhints->show();
+	}
+	$xhints->geometry($data{environment}->{windows}{hints}{geometry} 
+		|| $xhints->default_geometry)
+		if $xhints->showed();
+}
+
 sub savefile {
+	save_environment();
 	my $dump = new XML::Dumper;
 	my $xml = $dump->pl2xml(\%data);
 	if (open F,">$filename") {
@@ -565,25 +642,27 @@ sub repository {
 	$repository_window = $main->Toplevel();  
 	$repository_window->title('Object repository');
 	my $fp = $repository_window->Frame()
-		->pack(-side => 'top', -fill => 'x');
+		->pack(-side => 'top', -anchor => 'n', -fill => 'x');
+	my $fhp = $fp->Frame()
+		->pack(-side => 'top', -anchor => 'n', -fill => 'x');
 
-	$fp->Label(-text => 'Object type:')
-		->grid(-row => 1, -sticky => 'w', -column => 1);
-	$fp->Optionmenu(-options => [ qw/All Tables Views/, 'Tables and views',
+	$fhp->Label(-text => 'Object type:')
+		->grid(-row => 0, -sticky => 'nsew', -column => 0);
+	$fhp->Optionmenu(-options => [ qw/All Tables Views/, 'Tables and views',
 			'Relationships' ],
 		-variable => \$repository_object_type,
 		-command => \&show_repository)
-		->grid(-row => 1, -sticky => 'w', -column => 2);
-	$fp->Label(-text => 'Object filter:')
-		->grid(-row => 2, -sticky => 'w', -column => 1);
-	$fp->Optionmenu(-options => [ qw/All Unplaced Placed/ ],
+		->grid(-row => 0, -sticky => 'nsew', -column => 1);
+	$fhp->Label(-text => 'Object filter:')
+		->grid(-row => 1, -sticky => 'nsew', -column => 0);
+	$fhp->Optionmenu(-options => [ qw/All Unplaced Placed/ ],
 		-variable => \$repository_object_filter,
 		-command => \&show_repository)
-		->grid(-row => 2, -sticky => 'w', -column => 2);
-	$fp->gridRowconfigure(1, -weight => 0, -minsize => 15);
-	$fp->gridRowconfigure(2, -weight => 0, -minsize => 15);
-	$fp->gridColumnconfigure(1, -weight => 0, -minsize => 60);
-	$fp->gridColumnconfigure(2, -weight => 0, -minsize => 140);
+		->grid(-row => 1, -sticky => 'nsew', -column => 1);
+	$fhp->gridRowconfigure(0, -weight => 0, -minsize => 15);
+	$fhp->gridRowconfigure(1, -weight => 0, -minsize => 15);
+	$fhp->gridColumnconfigure(0, -weight => 0, -minsize => 60);
+	$fhp->gridColumnconfigure(1, -weight => 1, -minsize => 140);
 
 	$repository = $repository_window->Scrolled('Listbox', -setgrid => 1,
 		-scrollbars => 'e', -selectmode => 'single')
@@ -638,16 +717,12 @@ sub repository {
 				for (@{$data{tables}}) {
 					if ($_->{name} eq $object) {
 						place_table($_);
-						place_button_change();
-						show_repository();
 						return;
 					}
 				}
 				for (@{$data{relationships}}) {
 					if ($_->{name} eq $object) {
 						place_relationship($_);
-						place_button_change();
-						show_repository();
 						return;
 					}
 				}
@@ -664,10 +739,76 @@ sub repository {
 				-message => 
 				'You must select any object first.');
 		})->grid(-row => 1, -column => 2);
+	$fb->Button(-text => 'Drop', -command => sub {
+			if (defined (my $sel = $repository->curselection)) {
+				my $object = $repository->get($sel);
+				$object =~ s/^[+-] //;
+				$object =~ s/ \([RTV]\)$//;
+				$info->configure(-text => '');
+				for (@{$data{tables}}) {
+					if ($_->{name} eq $object) {
+						delete_table($_);
+						return;
+					}
+				}
+				for (@{$data{relationships}}) {
+					if ($_->{name} eq $object) {
+						delete_relationship($_);
+						return;
+					}
+				}
+				$main->messageBox(-icon => 'error', 
+					-type => 'OK', 
+					-title => 'Drop object', 
+					-message => 
+					'Object not found in object database.');
+				return;
+			}
+			$main->messageBox(-icon => 'error', 
+				-type => 'OK', 
+				-title => 'Drop object',
+				-message => 
+				'You must select any object first.');
+		})->grid(-row => 1, -column => 3);
 	$repository->bind('<1>',[ \&click_repository, 1 ]);
+	$repository->bind('<3>', [ \&repository_popup, Ev('x'), Ev('y') ]);
 	$repository_window->bind('<Key>', [ \&keypress, Ev('K') ]);
 	$repository_window->bind('<KeyRelease>', [ \&keyrelease, Ev('K') ]);
 	show_repository();	
+}
+
+sub repository_popup {
+	my ($obj,$x,$y) = @_;
+
+	my $sel = $repository->nearest($y);
+	return unless defined $sel;
+
+	my $object = $repository->get($sel);
+	$object =~ s/^[+-] //;
+	$object =~ s/ \([RTV]\)$//;
+	my $or = undef;
+	my $type = undef;
+	for (@{$data{tables}}) {
+		if ($_->{name} eq $object) 
+			{ $or = $_;  $type = 'table';  last; }
+	}
+	unless (defined $or) {
+		for (@{$data{relationships}}) {
+			if ($_->{name} eq $object) { 
+				$or = $_;  $type = 'relationship'; last;
+			}
+		}
+	}
+	return unless defined $or;
+	click_repository($or);
+
+	if ($type eq 'table') {
+		select_table($or) unless $or->{selection};
+		table_popup($obj,$or,$x,$y); 
+	} else { 
+		select_relationship($or) unless $or->{selection};
+		relationship_popup($obj,$or,$x,$y); 
+	}
 }
 
 sub conn_desc {
@@ -697,20 +838,19 @@ sub dragdrop_paste {
 	my ($dnd) = $repository->SelectionGet('-selection' => $seltype,
 		'STRING');
 	$dnd =~ s/ \([TVR]\)$//;
+
+	$x = $canvas->canvasx($x);
+	$y = $canvas->canvasy($y);
 	
 	for (@{$data{tables}}) {
 		if ($_->{name} eq $dnd) {
 			place_table($_,$x,$y);
-			place_button_change($_);
-			show_repository();
 			return;
 		}
 	}
 	for (@{$data{relationships}}) {
 		if ($_->{name} eq $dnd) {
 			place_relationship($_);
-			place_button_change($_);
-			show_repository();
 			return;
 		}
 	}
@@ -746,6 +886,7 @@ sub click_repository {
 	return unless Exists $repository_window and defined $repository;
 	$dragdrop->configure(-text => dragdrop_string());
 	if (defined (my $sel = $repository->curselection)) {
+		$repository->see($sel);
 		my $object = $repository->get($sel);
 		$object =~ s/^[+-] //;  
 		$object =~ s/ \([RTV]\)$//;
@@ -858,9 +999,11 @@ sub show_repository {
 }
 
 sub show_all {
+	++$all_show;
 	show_repository();
 	show_canvas();
 	click_repository();
+	$all_show = undef;
 }
 
 sub more_info_table {
@@ -885,7 +1028,7 @@ sub more_info_table {
 	$d->Label(-text => 'Columns:')
 		->grid(-row => 4, -column => 1, -sticky => 'w');
 	my $i = 0;
-	for (@{$_->{columns}}) {
+	for (@{$table->{columns}}) {
 		$d->Label(-text => $_)
 			->grid(-row => 4+$i, -column => 2, -sticky => 'w');
 		$d->gridRowconfigure(4+$i++, -weight => 0, -minsize => 30);
@@ -921,14 +1064,14 @@ sub more_info_relationship {
 	$d->Label(-text => 'From:')
 		->grid(-row => 3, -column => 1, -sticky => 'w');
 	my $i = 3;
-	for (@{$_->{from_columns}}) {
+	for (@{$relationship->{from_columns}}) {
 		$d->Label(-text => $_->{table}.' ('.$_->{column}.')')
 			->grid(-row => $i, -column => 2, -sticky => 'w');
 		$d->gridRowconfigure($i++, -weight => 0, -minsize => 30);
 	}
 	$d->Label(-text => 'To:')
 		->grid(-row => $i, -column => 1, -sticky => 'w');
-	for (@{$_->{to_columns}}) {
+	for (@{$relationship->{to_columns}}) {
 		$d->Label(-text => $_->{table}.' ('.$_->{column}.')')
 			->grid(-row => $i, -column => 2, -sticky => 'w');
 		$d->gridRowconfigure($i++, -weight => 0, -minsize => 30);
@@ -984,6 +1127,11 @@ sub place_table {
 			}
 		}
 	}
+
+	unless ($all_show) {
+		place_button_change();
+		show_repository();
+	}
 }
 
 sub place_relationship {
@@ -1000,6 +1148,11 @@ sub place_relationship {
 				not $_->{placed};
 		}
 		show_relationship($relationship);
+	}
+
+	unless ($all_show) {
+		place_button_change();
+		show_repository();
 	}
 }
 
@@ -1208,9 +1361,136 @@ sub show_relationship {
 		[ \&relationship_motion, $relationship, Ev('x'), Ev('y') ]);
 	$canvas->bind($relationship->{name},'<B1-ButtonRelease>', 
 		[ \&relationship_mouse_up, $relationship, Ev('x'), Ev('y') ]);
+	$canvas->bind($relationship->{name},'<3>',
+		[ \&relationship_popup, $relationship, Ev('x'), Ev('y') ]);
 
 	my $subw = $canvas->Subwidget('canvas');
 	$subw->lower($relationship->{name},'all');
+}
+
+sub relationship_popup {
+	my ($obj,$relationship,$x,$y) = @_;
+
+	my $popup = $obj->Menu(-tearoff => 0);
+	if ($relationship->{selection}) {
+		if ($relationship->{connection} eq 'coords') {
+			my @coords = map { @$_ } @{$relationship->{coords}};
+
+			my $dropdrag = 0;
+			while (@coords) {
+				my $cx = shift @coords;  my $cy = shift @coords;
+				++$dropdrag if abs($x-$cx) <= 4 
+							and abs($y-$cy) <= 4;
+			}
+
+			if ($dropdrag) {
+				$popup->add('command',
+					 -label => 'Delete dragpoint',
+					-command => [ 
+					\&relationship_ctrl_mouse_2_down, $obj,
+					$relationship, $x, $y ]);
+				$popup->separator;
+			} elsif (ref $obj eq 'Tk::Canvas') {
+				$popup->add('command',
+					-label => 'Add dragpoint',
+					-command => [ 
+					\&relationship_ctrl_mouse_down, $obj,
+					$relationship, $x, $y ]);
+				$popup->separator;
+			}
+		}
+
+		my $mode = $relationship->{connection};
+		$popup->add('radiobutton', -variable => \$mode,
+			-label => 'Auto connection', -value => 'auto',
+			-command => [ \&auto_mode, $relationship ]);
+		$popup->add('radiobutton', -variable => \$mode,
+			-label => 'Direct connection', -value => 'direct',
+			-command => [ \&direct_mode, $relationship ]);
+		$popup->add('radiobutton', -variable => \$mode,
+			-label => 'Coords based connection', -value => 'coords',
+			-command => [ \&coords_mode, $relationship ]);
+		$popup->separator;
+		$popup->add('command', -label => 'From side: '.
+				$relationship->{from_side},
+			-command => [ \&from_side_change, $relationship ]);
+		$popup->add('command', -label => 'To side: '.
+				$relationship->{to_side},
+			-command => [ \&to_side_change, $relationship ]);
+		$popup->separator;
+		my $smooth = $relationship->{smooth};
+		$popup->add('checkbutton', -variable => \$smooth,
+			-label => 'Smooth mode', -onvalue => 1, -offvalue => 0,
+			-command => [ \&smooth_mode, $relationship ]);
+		$popup->separator;
+		$popup->add('command', -label => 'More information',
+			-command => [ \&more_info_relationship, 
+			$relationship ]);
+		$popup->separator;
+		$popup->add('command', -label => 'Unselect',
+			-command => [ \&deselect_relationship, $relationship ]);
+		if ($relationship->{placed}) {
+			$popup->add('command', -label => 'Unplace',
+				-command => [ \&unplace_relationship, 
+				$relationship ]);
+		} else {
+			$popup->add('command', -label => 'Place',
+				-command => [ \&place_relationship, 
+				$relationship ]);
+		}
+		$popup->separator;
+		$popup->add('command', -label => 'Drop',
+			-command => [ \&delete_relationship, $relationship ]);
+	} else {
+		$popup->add('command', -label => 'Select',
+			-command => [ \&select_relationship, $relationship ]);
+	}
+	$popup->Popup(-popover => 'cursor', -popanchor => 'nw');
+	++$global_bind_cancel;
+}
+
+sub canvas_popup {
+	my ($obj,$x,$y) = @_;
+
+	if ($global_bind_cancel) {
+		$global_bind_cancel = undef;
+		return;
+	}
+
+	my $popup = $canvas->Menu(-tearoff => 0);
+	$popup->add('command', -label => 'Save', -command => \&savefile);
+	$popup->separator;
+	$popup->add('command', -label => 'Deselect all',
+		-command => \&deselect_all);
+	$popup->Popup(-popover => 'cursor', -popanchor => 'nw');
+}
+
+sub table_popup {
+	my ($obj,$table,$x,$y) = @_;
+
+	my $popup = $obj->Menu(-tearoff => 0);
+	if ($table->{selection}) {
+		$popup->add('command', -label => 'More information',
+			-command => [ \&more_info_table, $table ]);
+		$popup->separator;
+		$popup->add('command', -label => 'Unselect',
+			-command => [ \&deselect_table, $table ]);
+		if ($table->{placed}) {
+			$popup->add('command', -label => 'Unplace',
+				-command => [ \&unplace_table, $table ]);
+		} else {
+			$popup->add('command', -label => 'Place',
+				-command => [ \&place_table, $table ]);
+		}
+		$popup->separator;
+		$popup->add('command', -label => 'Drop',
+			-command => [ \&delete_table, $table ]);
+	} else {
+		$popup->add('command', -label => 'Select',
+			-command => [ \&select_table, $table ]);
+	}
+	$popup->Popup(-popover => 'cursor', -popanchor => 'nw');
+	++$global_bind_cancel;
 }
 
 sub keyrelease {
@@ -1243,38 +1523,17 @@ sub keypress {
 	} elsif ($key eq 's') {
 		# Smooth for relationships
 		for (@{$data{relationships}}) {
-			next unless $_->{selection};
-			if ($_->{smooth}) {
-				delete $_->{smooth};
-			} else {
-				++$_->{smooth};
-			}
-			show_relationship($_);
-			click_repository();
+			smooth_mode($_) if $_->{selection};
 		}
 	} elsif ($key eq 'f') {
 		# Change from side
 		for (@{$data{relationships}}) {
-			next unless $_->{selection};
-			if ($_->{from_side} eq 'left') {
-				$_->{from_side} = 'right';
-			} else {
-				$_->{from_side} = 'left';
-			}
-			show_relationship($_);
-			click_repository();
+			from_side_change($_) if $_->{selection};
 		}
 	} elsif ($key eq 't') {
 		# Change to side
 		for (@{$data{relationships}}) {
-			next unless $_->{selection};
-			if ($_->{to_side} eq 'left') {
-				$_->{to_side} = 'right';
-			} else {
-				$_->{to_side} = 'left';
-			}
-			show_relationship($_);
-			click_repository();
+			to_side_change($_) if $_->{selection};
 		}
 	} elsif ($key eq 'Delete' and not $Pressed{Control_L} and 
 			not $Pressed{Control_R}) {
@@ -1295,6 +1554,42 @@ sub keypress {
 			delete_relationship($_) if $_->{selection};
 		}
 	}
+}
+
+sub from_side_change {
+	my $relationship = shift;
+
+	if ($relationship->{from_side} eq 'left') {
+		$relationship->{from_side} = 'right';
+	} else {
+		$relationship->{from_side} = 'left';
+	}
+	show_relationship($relationship);
+	click_repository();
+}
+
+sub to_side_change {
+	my $relationship = shift;
+
+	if ($relationship->{to_side} eq 'left') {
+		$relationship->{to_side} = 'right';
+	} else {
+		$relationship->{to_side} = 'left';
+	}
+	show_relationship($relationship);
+	click_repository();
+}
+
+sub smooth_mode {
+	my $relationship = shift;
+
+	if ($relationship->{smooth}) {
+		delete $relationship->{smooth};
+	} else {
+		++$relationship->{smooth};
+	}
+	show_relationship($relationship);
+	click_repository();
 }
 
 sub unplace_table {
@@ -1355,7 +1650,7 @@ sub relationship_mouse_down {
 	my ($obj,$relationship,$x,$y) = @_;
 
 	$x = $canvas->canvasx($x);
-	$y = $canvas->canvasx($y);
+	$y = $canvas->canvasy($y);
 
 	if ($relationship->{selection}) {
 		my $i = 0;
@@ -1377,7 +1672,7 @@ sub relationship_ctrl_mouse_down {
 	my ($obj,$relationship,$x,$y) = @_;
 
 	$x = $canvas->canvasx($x);
-	$y = $canvas->canvasx($y);
+	$y = $canvas->canvasy($y);
 
 	if ($relationship->{selection}) {
 		my $i = 0;
@@ -1415,7 +1710,7 @@ sub relationship_ctrl_mouse_2_down {
 	my ($obj,$relationship,$x,$y) = @_;
 
 	$x = $canvas->canvasx($x);
-	$y = $canvas->canvasx($y);
+	$y = $canvas->canvasy($y);
 
 	if ($relationship->{selection}) {
 		my @coords = map { @$_ } @{$relationship->{coords}};
@@ -1577,6 +1872,8 @@ sub show_table {
 		[ \&table_motion, $table, Ev('x'), Ev('y') ]);
 	$canvas->bind($table->{name},'<B1-ButtonRelease>', 
 		[ \&table_mouse_up, $table, Ev('x'), Ev('y') ]);
+	$canvas->bind($table->{name},'<3>',
+		[ \&table_popup, $table, Ev('x'), Ev('y') ]);
 }
 
 sub show_canvas {
@@ -1758,12 +2055,11 @@ Schema can be printed to PostScript file.
 
 =head1 VERSION
 
-0.08
+0.09
 
 =head1 TODO
 
-Putting on CPAN,
-announcing on Freshmeat,
+Announcing on Freshmeat,
 droping IDT relationships,
 posterizing PostScript output,
 retrieving only updates from database (for schema),
@@ -1778,14 +2074,13 @@ hints on status line,
 alignment,
 text tool for making notes on canvas,
 splash,
-integrated manual,
+integrated manual or web documentation,
 setting canvas size by user (enlarging), 
-saving position of scrollbars,
-information about unwanted tables and relationships,
 backward update for databases,
 support comments in database schema,
 box with texts as special kind of objects,
-local right-click menus,
+finding object in repository,
+locating object on canvas,
 solving known bugs.
 
 =head1 KNOWN BUGS
@@ -1802,8 +2097,8 @@ large tables quite slow move.
 at Faculty of Economics,
 Mendel University of Agriculture and Forestry in Brno, Czech Republic.
 
-Special thanks for Miroslav Kripac (SchemaView) and Ing. Hana Cerna (schema 
-for UIS MZLU).
+Special thanks for Miroslav Kripac (SchemaView) and Ing. Hana Netrefova
+(schema for UIS MZLU).
 
 This program was made because we need draw large database schema for 
 University Information System at our university. Miroslav Kripac's

@@ -69,6 +69,16 @@ if ($ExtUtils::MakeMaker::VERSION >= 5.43) {
 
 ExtUtils::MakeMaker::WriteMakefile(%opts);
 
+print <<EOF;
++----------------------------------------+
+| For using and documentation please run |
+|                                        |
+|               svplus                   |
+|                                        |
+| and try use Help -> Hints.             |
++----------------------------------------+
+EOF
+
 exit 0;
 
 package MY;

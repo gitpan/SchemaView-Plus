@@ -1,11 +1,10 @@
+Changes
+LICENSE
 MANIFEST
+Makefile.PL
+README
 bin/svplus
-doc/Artistic
-doc/Changes
-doc/GPL
-doc/LICENSE
-doc/README
-doc/example.svp
+eg/example.svp
 lib/DBIx/SystemCatalog.pm
 lib/DBIx/SystemCatalog/Oracle.pm
 lib/DBIx/SystemCatalog/Pg.pm
@@ -20,4 +19,3 @@ t/02.t
 t/03.t
 t/04.t
 t/05.t
-Makefile.PL

@@ -1,5 +1,5 @@
 <?xml version="1.0"?>
-<schemaviewplus version="0.04">
+<schemaviewplus version="0.09">
 <perldata>
  <hash>
   <item key="sc_types">
@@ -28,6 +28,7 @@
    <array>
     <item key="0">
      <hash>
+      <item key="x">151</item>
       <item key="columns">
        <array>
         <item key="0">ID</item>
@@ -36,14 +37,14 @@
       </item>
       <item key="schema">SORM</item>
       <item key="name">TAB1</item>
-      <item key="type">1</item>
-      <item key="x">151</item>
       <item key="y">204</item>
       <item key="placed">yes</item>
+      <item key="type">1</item>
      </hash>
     </item>
     <item key="1">
      <hash>
+      <item key="x">353</item>
       <item key="columns">
        <array>
         <item key="0">ID</item>
@@ -53,15 +54,16 @@
       </item>
       <item key="schema">SORM</item>
       <item key="name">TAB2</item>
-      <item key="type">1</item>
-      <item key="x">353</item>
       <item key="placed">yes</item>
       <item key="y">133</item>
+      <item key="type">1</item>
      </hash>
     </item>
     <item key="2">
      <hash>
       <item key="x">185</item>
+      <item key="y">52</item>
+      <item key="placed">yes</item>
       <item key="columns">
        <array>
         <item key="0">ID</item>
@@ -72,12 +74,46 @@
       </item>
       <item key="schema">SORM</item>
       <item key="name">TAB3</item>
-      <item key="placed">yes</item>
-      <item key="y">54</item>
       <item key="type">1</item>
      </hash>
     </item>
    </array>
+  </item>
+  <item key="environment">
+   <hash>
+    <item key="windows">
+     <hash>
+      <item key="repository">
+       <hash>
+        <item key="showed">1</item>
+       </hash>
+      </item>
+      <item key="hints">
+       <hash>
+        <item key="showed">1</item>
+       </hash>
+      </item>
+     </hash>
+    </item>
+    <item key="canvas">
+     <hash>
+      <item key="all">
+       <hash>
+        <item key="top">0</item>
+        <item key="left">0</item>
+        <item key="bottom">4000</item>
+        <item key="right">4000</item>
+       </hash>
+      </item>
+      <item key="offset">
+       <hash>
+        <item key="x">-1</item>
+        <item key="y">-1</item>
+       </hash>
+      </item>
+     </hash>
+    </item>
+   </hash>
   </item>
   <item key="relationships">
    <array>

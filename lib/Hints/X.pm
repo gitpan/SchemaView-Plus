@@ -4,7 +4,7 @@ use strict;
 use vars qw/$VERSION/;
 use Tk;
 
-$VERSION = '0.01';
+$VERSION = '0.02';
 
 =head1 NAME
 
@@ -56,7 +56,7 @@ sub create_window {
 
 	$obj->{w} = $obj->{mw}->Toplevel;
 	$obj->{w}->withdraw;
-	$obj->{w}->geometry("480x120");
+	$obj->{w}->geometry($obj->default_geometry);
 	$obj->{w}->resizable(0,0);
 	$obj->{w}->title('Hints');
 	$obj->{w}->iconname('Hints');
@@ -112,6 +112,45 @@ sub hide {
 	$obj->{w}->withdraw;
 }
 
+=head2 showed
+
+Is window with hints open and visible?
+
+	do_something() if $xhints->showed;
+
+=cut
+
+sub showed {
+	my $obj = shift;
+	return Exists($obj->{w});
+}
+
+=head2 geometry
+
+Wrapper for Tk::Widget geometry method.
+
+	my $geom = $xhints->geometry;
+
+=cut
+
+sub geometry {
+	my $obj = shift;
+	return $obj->{w}->geometry(@_);
+}
+
+=head2 default_geometry
+
+Defaults values for C<geometry()>.
+
+	$xhints->geometry($xhints->default_geometry);
+
+=cut
+
+sub default_geometry {
+	my $obj = shift;
+	return "480x120";
+}
+
 sub random {
 	my $obj = shift;
 	$obj->{current} = $obj->{hints}->random;
@@ -141,7 +180,7 @@ __END__
 
 =head1 VERSION
 
-0.01
+0.02
 
 =head1 AUTHOR
 

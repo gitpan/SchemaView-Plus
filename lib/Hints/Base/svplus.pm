@@ -4,7 +4,7 @@ use strict;
 use Hints::Base;
 use vars qw/$VERSION @ISA/;
 
-$VERSION = '0.01';
+$VERSION = '0.02';
 @ISA = qw/Hints::Base/;
 
 =head1 NAME
@@ -57,11 +57,13 @@ to move with dragpoints.
 ---
 <Control> + <Delete> keys permanently drop selected table or relationship
 from object repository (and from canvas too).
+---
+Try right-click to popup local context menu with useful commands.
 __END__
 
 =head1 VERSION
 
-0.01
+0.02
 
 =head1 AUTHOR
 

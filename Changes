@@ -1,5 +1,20 @@
 Revision history for Perl extension SchemaView Plus.
 
+0.09 <20010407 Herman>
+	- take out license files (same as Perl)
+	- directory structure changes
+	- popup menu (relationships, dragpoints, tables, canvas, repository)
+	- some new hints
+	- big bug with scrolling and dragpoints solved
+	- bug with drag'n'drop tables and scrolling solved
+	- bug with more information about object solved
+	- Drop button in object repository
+	- selection make visible selected item in object repository
+	- saving position of scrollbars and canvas dimensions
+	- saving position and dimensions of all windows
+	- Hints::X 0.02, Hints::Base 0.02 (small changes)
+	- Hana Cerna's wedding's day - now Mrs. Netrefova
+
 0.08 <20010406 Vendula>
 	- opening object repository window with raising
 	- Math::Project 0.03 with EXPORT_OK version of exporting functions
