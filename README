@@ -1,5 +1,5 @@
-SchemaView Plus 0.16
-(c) Copyright 2001-02 by Milan Sorm, sorm@pef.mendelu.cz
+SchemaView Plus 0.17
+(c) Copyright 2001-2014 by Milan Sorm, sorm@milansorm.cz
 
 If you plan to use this program you must respect LICENSE file.
 
@@ -9,8 +9,8 @@ some new extensions for Perl.
 Depends on installation of Tk, Tk::FontDialog, Tk::ProgressBar, Tk::MListbox,
 XML::Parser, XML::Dumper, Data::Dumper, FindBin, DBI and some DBD driver.
 
-Please read manual page for svplus, DBIx::SystemCatalog, Math::Project,
-Hints, Hints::Base, Data::RefSupport, Print::Printcap and PostScript::Poster
+Please read manual page for svplus, DBIx::SystemCatalog, 
+Hints, Hints::Base, Print::Printcap and PostScript::Poster
 for more information.
 
 To install make

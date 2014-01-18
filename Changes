@@ -1,5 +1,9 @@
 Revision history for Perl extension SchemaView Plus.
 
+0.17 <20140118>
+	- put Math::Project, Data::CompactDump to separate CPAN distribution
+	- remove Data::RefSupport (obsolete with List::Flatten)
+
 0.16 <20020121>
 	- removing test for XML::SimpleParser
 

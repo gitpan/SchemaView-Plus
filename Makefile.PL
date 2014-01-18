@@ -61,11 +61,12 @@ my %opts = (
 );
 
 if ($ExtUtils::MakeMaker::VERSION >= 5.43) {
-	$opts{AUTHOR} = 'Milan Sorm (sorm@pef.mendelu.cz)';
+	$opts{AUTHOR} = 'Milan Sorm (sorm@milansorm.cz)';
 	$opts{ABSTRACT} = 'Retrieve, drawing and printing database schema';
-	$opts{PREREQ_PM} = { DBI => '1.12', Tk => 0, 'XML::Parser' => 0,
+	$opts{PREREQ_PM} = { DBI => '1.12', Tk => 800.014, 'XML::Parser' => 0,
 		'XML::Dumper' => '0.4', FindBin => 0, 'Tk::MListbox' => 0,
-		'Tk::ProgressBar' => 0, 'Tk::FontDialog' => 0 };
+		'Tk::ProgressBar' => 0, 'Tk::FontDialog' => 0, 'Data::CompactDump' => 0,
+		'Math::Project' => 0 };
 }
 
 ExtUtils::MakeMaker::WriteMakefile(%opts);

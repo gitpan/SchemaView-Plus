@@ -1,19 +1,44 @@
 # test loading
 
-BEGIN { $| = 1; print "1..2\n"; }
+BEGIN { $| = 1; print "1..4\n"; }
 END { print "not ok 1\n" unless $loaded; }
 
-use Math::Project qw/project/;
+use Hints;
 
 $loaded = 1;
 print "ok 1\n";
 
-# test one correct result of project()
+# test output from module
 
-my ($x,$y,$distance) = project (20,100,200,10,5,15);
+my @data = <DATA>;
 
-if ($x == 42 and $y == 89 and $distance == 83) {
-	print "ok 2\n";
-} else {
-	print "not ok 2\n";
-}
+my $hints = new Hints;
+
+$hints->load_from_file(\@data);
+
+print "not " if $hints->count() != 3 or $hints->first() ne 'First' 
+		or $hints->next() ne 'Second' or not defined $hints->item(3);
+
+print "ok 2\n";
+
+$hints->clear;
+
+print "not " if $hints->count();
+
+print "ok 3\n";
+
+$hints->load_from_file(\@data,'@-@');
+
+print "not " if $hints->count() != 2;
+# or $hints->item(1) ne 'Special' ;
+
+print "ok 4\n";
+
+__DATA__
+First
+---
+Second
+---
+Third
+@-@
+Special
